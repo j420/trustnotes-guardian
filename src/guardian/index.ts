@@ -26,6 +26,8 @@ export class Guardian extends EventTarget {
   private origExecute = new Map<string, (a: any) => any>();
   private validators = new Map<string, (a: any) => boolean>();
   private loadWindowClosed = false;
+  /** false only if a native browser locked registerTool so Guardian couldn't wrap it. */
+  interceptionActive = true;
   consentHandler: ConsentHandler | null = null;
 
   private emit() { this.dispatchEvent(new Event("change")); }
@@ -41,7 +43,7 @@ export class Guardian extends EventTarget {
 
     const origRegister = mc.registerTool.bind(mc);
     const self = this;
-    mc.registerTool = async function (tool: WebMcpTool, options?: any) {
+    const guardedRegister = async function (tool: WebMcpTool, options?: any) {
       // Attempted-overwrite: a name we already trust is being re-registered.
       if (self.tools.has(tool.name)) {
         try {
@@ -62,6 +64,15 @@ export class Guardian extends EventTarget {
       self.ingest(tool);
       return res;
     };
+
+    // Install the wrapper robustly. A NATIVE (flag-enabled) browser may expose
+    // modelContext with a non-writable registerTool; a bare assignment would THROW
+    // in module strict mode and white-screen the app. Fall back to defineProperty on
+    // the instance, then the prototype, and never let a failure crash boot.
+    this.interceptionActive = installMethod(mc, "registerTool", guardedRegister);
+    if (!this.interceptionActive) {
+      cfgWarn("Guardian could not wrap registerTool (native property is locked on this browser build) — running in observation-limited mode. The polyfill path is fully supported.");
+    }
 
     // Guardian's own agent-callable tools go through the ORIGINAL register (unguarded,
     // never self-audited, and an injected tool can never disable them).
@@ -204,6 +215,22 @@ function describeEffects(effects: SideEffect[]): string {
   return parts.join(" · ");
 }
 function shortHost(url: string) { try { return new URL(url, location.href).host; } catch { return url; } }
+function cfgWarn(msg: string) { try { console.warn("[Guardian] " + msg); } catch { /* noop */ } }
+
+/**
+ * Install `fn` as `obj[name]`, tolerating a non-writable native property. Tries a
+ * direct assignment, then defineProperty on the instance, then on the prototype;
+ * never throws. Returns whether the method now IS `fn` (i.e. interception took).
+ */
+function installMethod(obj: any, name: string, fn: any): boolean {
+  try { obj[name] = fn; if (obj[name] === fn) return true; } catch { /* non-writable */ }
+  try { Object.defineProperty(obj, name, { value: fn, writable: true, configurable: true }); if (obj[name] === fn) return true; } catch { /* non-configurable */ }
+  try {
+    const proto = Object.getPrototypeOf(obj);
+    if (proto) { Object.defineProperty(proto, name, { value: fn, writable: true, configurable: true }); if (obj[name] === fn) return true; }
+  } catch { /* frozen prototype */ }
+  return false;
+}
 function safeParse(s: string) { try { return JSON.parse(s); } catch { return {}; } }
 function errorResult(text: string) { return { content: [{ type: "text", text }], isError: true }; }
 
