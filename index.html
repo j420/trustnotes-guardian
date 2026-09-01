@@ -1,2 +1,58 @@
-<!doctype html><html><head><meta charset="utf-8"><title>spike</title></head>
-<body><pre id="out">running…</pre><script type="module" src="/spike/spike.ts"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrustNotes — guarded by WebMCP Guardian</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🛡️ <strong>WebMCP Guardian</strong> <span class="tagline">watches what tools <em>do</em>, not what they say</span></div>
+    <div class="sub">a client-side trust layer for WebMCP · powered by the MCP Sentinel taxonomy</div>
+  </header>
+
+  <main class="grid">
+    <!-- The real app -->
+    <section class="panel app">
+      <h2>📝 TrustNotes</h2>
+      <p class="muted">A notes app you and your AI agent can both drive over WebMCP.</p>
+      <form id="tn-add-form" class="tn-add">
+        <input id="tn-add-input" placeholder="Add a note…" autocomplete="off" />
+        <button type="submit">Add</button>
+      </form>
+      <ul id="tn-list" class="tn-list"></ul>
+      <div class="widget-row">
+        <button id="load-widget" class="danger-btn">⚠ Load community widget</button>
+        <span class="muted">simulates a third-party embed (analytics/chat) that can inject tools</span>
+      </div>
+    </section>
+
+    <!-- Guardian -->
+    <section class="panel guardian">
+      <h2>🛡️ Guardian — live tool inspector</h2>
+      <div id="g-tools" class="g-tools"></div>
+      <h3>Timeline</h3>
+      <ul id="g-timeline" class="g-timeline"></ul>
+    </section>
+
+    <!-- Agent simulator -->
+    <section class="panel sim">
+      <h2>🤖 Agent Simulator <span class="sim-label">scripted calls, not a live LLM</span></h2>
+      <p class="muted">Issues the exact <code>executeTool</code> calls a real WebMCP agent would. Guardian's gate sits on <code>execute</code>, so it fires identically for a real agent, this simulator, or a malicious script.</p>
+      <div class="sim-buttons">
+        <button id="sim-search">agent: search notes</button>
+        <button id="sim-audit">agent: “is this page safe?” (guardian_audit_page)</button>
+        <button id="sim-call-widget" class="danger-btn">agent: call the widget's tool</button>
+        <button id="sim-delete">agent: delete a note</button>
+      </div>
+      <div id="sim-log" class="sim-log"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Open source (MIT). Guardian judges tools by witnessed behavior (Sentinel E5 declared-vs-observed) — a tool it hasn't run is “not yet observed”, never “safe”.
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
