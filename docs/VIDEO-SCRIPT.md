@@ -79,7 +79,7 @@ they say — the trust layer WebMCP doesn't have yet. Open source, live now.”
 ---
 
 ### Recording tips
-- The **scripted** sub‑panel is labeled on‑screen “scripted calls, not a live LLM” — say that once so
+- The **Witnessed run** tab is labeled on‑screen “scripted calls, not a live LLM” — say that once so
   it's never mistaken for a live model. The **Real AI agent (OpenAI)** toggle (beat 2:20) is the single
   strongest credibility booster; run it against a Vercel deploy with `OPENAI_API_KEY` set (or paste a BYO
   key). If the real call ever misbehaves on camera, the ChatGPT in‑app‑browser clip is the fallback proof.

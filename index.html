@@ -35,18 +35,18 @@
       <ul id="g-timeline" class="g-timeline"></ul>
     </section>
 
-    <!-- Agent (two modes: scripted simulator + real OpenAI) -->
+    <!-- Agent (two modes: witnessed run [scripted] + real OpenAI) -->
     <section class="panel sim">
       <h2>🤖 Agent</h2>
-      <p class="muted">Drive the page's WebMCP tools two ways. <strong>Guardian's gate sits on <code>execute</code></strong>, so it fires identically for a real model, this scripted simulator, or a malicious script — the LLM only <em>drives</em>, it is never inside the security decision.</p>
+      <p class="muted">Drive the page's WebMCP tools two ways. <strong>Guardian's gate sits on <code>execute</code></strong>, so it fires identically for a real model, these scripted calls, or a malicious script — the LLM only <em>drives</em>, it is never inside the security decision.</p>
       <div class="mode-toggle" role="tablist">
-        <button id="mode-scripted" class="mode-btn active">Scripted simulator</button>
+        <button id="mode-scripted" class="mode-btn active">Witnessed run</button>
         <button id="mode-real" class="mode-btn">Real AI agent (OpenAI)</button>
       </div>
 
-      <!-- Scripted sub-panel (default) -->
+      <!-- Witnessed-run sub-panel (default; scripted calls, verdicts live) -->
       <div id="panel-scripted" class="mode-panel">
-        <p class="muted"><span class="sim-label">scripted calls, not a live LLM</span> Issues the exact <code>executeTool</code> calls a real WebMCP agent would — verdicts are computed live.</p>
+        <p class="muted"><span class="sim-label">scripted calls, not a live LLM</span> Fire the exact <code>executeTool</code> calls a real WebMCP agent would — Guardian witnesses each one live and its verdict is computed live.</p>
         <div class="sim-buttons">
           <button id="sim-search">agent: search notes</button>
           <button id="sim-audit">agent: “is this page safe?” (guardian_audit_page)</button>

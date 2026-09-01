@@ -46,9 +46,9 @@ Guardian also registers its own agent‑callable tools — `guardian_audit_page`
 - Every claim is labeled **DECLARED** (the tool's own words) vs **OBSERVED** (what Guardian witnessed)
   vs a **static** metadata fact.
 - A tool the agent hasn't run is **“not yet observed” — never “safe.”**
-- The **Agent Simulator** in the UI is clearly labeled **“scripted calls, not a live LLM.”** It issues
+- The **Witnessed run** mode in the UI is clearly labeled **“scripted calls, not a live LLM.”** It fires
   the exact `executeTool` calls a real agent would; Guardian's gate sits on `execute`, so it fires
-  identically for a real agent, the simulator, or a malicious script. **Verdicts are computed live,
+  identically for a real agent, this scripted driver, or a malicious script. **Verdicts are computed live,
   never scripted.**
 
 ## Powered by the MCP Sentinel taxonomy — concretely
@@ -118,8 +118,9 @@ in Chrome (behind the WebMCP flag) and ChatGPT's in‑app browser.
 
 The Agent panel offers **two ways** to drive the page's tools, and the demo operator picks the mode:
 
-- **Scripted simulator** (default, always works offline) — issues the exact `executeTool` calls a real
-  WebMCP agent would. No key, no network. Labeled on‑screen *“scripted calls, not a live LLM.”*
+- **Witnessed run** (default, always works offline) — fires the exact `executeTool` calls a real WebMCP
+  agent would; Guardian witnesses each one live. No key, no network. These are scripted calls, labeled
+  on‑screen *“scripted calls, not a live LLM.”*
 - **Real AI agent (OpenAI)** — a real OpenAI model **drives** the app: it reads the page's WebMCP tools,
   decides which to call, and Guardian gates every call. Because OpenAI's API is CORS‑blocked from the
   browser and the key must stay server‑side, the model call goes through a tiny same‑origin serverless

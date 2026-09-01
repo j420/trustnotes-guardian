@@ -54,8 +54,9 @@ tool's *declared metadata* can see (the agent only reads name/description/schema
 The deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
 Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (18/18).
 
-**Two agent modes (user‑selectable).** The Agent panel drives the page's tools two ways: a **scripted
-simulator** (default, offline, labeled "not a live LLM") and a **real OpenAI agent** — a real model reads
+**Two agent modes (user‑selectable).** The Agent panel drives the page's tools two ways: a **witnessed
+run** (default, offline — scripted calls Guardian witnesses live, labeled "not a live LLM") and a **real
+OpenAI agent** — a real model reads
 the page's WebMCP tools and decides which to call, relayed through a tiny same‑origin serverless proxy
 (`api/agent.js`) because OpenAI's API is CORS‑blocked from the browser and the key must stay server‑side.
 The browser runs the agent *loop*; every tool call flows through the **same** `executeTool → guardedExecute`
@@ -71,7 +72,7 @@ runs a real OpenAI agent against these tools**, so the build is already gated th
   and gating `registerTool`/`executeTool`) **and** *registers* its own agent‑callable tools; TrustNotes
   registers four real tools an agent drives — and a **real OpenAI agent** can drive them through the gate.
 - **Execution:** a complete, coherent product — a usable notes app + a live inspector + consent modal +
-  probe + a dual‑mode agent (scripted **and** real OpenAI), deployed and demoable, with automated proofs
+  probe + a dual‑mode agent (a witnessed scripted run **and** a real OpenAI agent), deployed and demoable, with automated proofs
   (spike 12/12, e2e 18/18, validate 61/61).
 - **Potential Impact:** a concrete audience (developers shipping WebMCP tools who also load third‑party
   scripts) and a documented, current threat (arXiv 2606.06387) that WebMCP has no built‑in defense for —
@@ -86,7 +87,7 @@ deception into the (unrestricted) description and leaned on the name‑independe
 as the headline. Attributing an async side effect to the right tool needed a careful active‑tool window.
 
 ## Honesty (what we did NOT claim)
-"Not yet observed" is never "safe." The scripted sub‑panel is labeled "scripted calls, not a live LLM"
+"Not yet observed" is never "safe." The Witnessed‑run sub‑panel is labeled "scripted calls, not a live LLM"
 (verdicts are computed live); the real sub‑panel is a genuine OpenAI model and is labeled as such. The
 LLM only *drives* — it never enters the gate, and we don't claim it adds any security. A bring‑your‑own
 key travels once to *your own* deployment's proxy and is never stored; we say so in‑app. We say data is
