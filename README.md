@@ -6,7 +6,7 @@ mid‑session by third‑party scripts, and gates risky calls behind human conse
 that as agent‑callable WebMCP tools. Demonstrated inside **TrustNotes**, a real notes app a human and
 their agent both drive.
 
-Built for the **OpenAI WebMCP Challenge**. Open source (MIT).
+Open source (MIT).
 
 ---
 
