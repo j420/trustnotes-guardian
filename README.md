@@ -53,36 +53,41 @@ Guardian also registers its own agent‑callable tools — `guardian_audit_page`
 
 ## Powered by the MCP Sentinel taxonomy — concretely
 
-Guardian's static observations reuse **real detection data ported from [MCP Sentinel](https://github.com/j420/mcpsentinal)**,
-a 183‑rule MCP‑security registry. Sentinel's engine is server‑side (Node + Postgres) and can't run in a
-browser, so Guardian ports the browser‑relevant tables and, crucially, Sentinel's *matching strategy* —
-not a naive keyword scan. The ported data lives in [`src/guardian/data/sentinel-*.ts`](src/guardian/data):
+Guardian reuses **real detection data ported from [MCP Sentinel](https://github.com/j420/mcpsentinal)**,
+a 183‑rule MCP‑security registry — **20 rules** re‑implemented for the browser. Sentinel's engine is
+server‑side (Node + Postgres) and can't run in a browser, so Guardian ports the tables and, crucially,
+Sentinel's *matching strategy* — not a naive keyword scan. The ported data lives in
+[`src/guardian/data/sentinel-*.ts`](src/guardian/data); some catalogues are **verbatim**, the two biggest
+classifiers are honestly‑labeled **curated subsets**:
 
 | File | Ported from Sentinel | Fidelity |
 |---|---|---|
-| `sentinel-invisible.ts` | `a7-zero-width-injection/data/invisible-codepoints.ts` | **verbatim** catalogue (class‑gated) |
-| `sentinel-phrases.ts` | `a1-prompt-injection-description/data/injection-phrases.ts` | **verbatim** catalogue (ordered‑token match) |
-| `sentinel-preference.ts` | `j6-tool-preference-manipulation/data/preference-composition.ts` | **verbatim** operator/referent vocabulary (compositional) |
-| `sentinel-confusables.ts` | `a6-unicode-homoglyph` UTS‑39 table (~97k tokens) | **curated subset** (mixed‑script gate), honestly labeled |
-| `sentinel-registry.ts` | `packages/database/src/rule-registry.ts` | **verbatim** rule name / severity / OWASP / MITRE / remediation |
+| `sentinel-invisible.ts` (A7) | `a7-zero-width-injection/data/invisible-codepoints.ts` | **verbatim** (class‑gated) |
+| `sentinel-phrases.ts` (A1) | `a1-.../data/injection-phrases.ts` | **verbatim** (ordered‑token) |
+| `sentinel-preference.ts` (J6) | `j6-.../data/preference-composition.ts` | **verbatim** (compositional) |
+| `sentinel-prior-approval.ts` (G5) | `g5-.../data/prior-approval-phrases.ts` | **verbatim** (ordered‑token + adjacency) |
+| `sentinel-trust.ts` (G2) | `g2-.../trust-consequences.ts` + `_shared/ai-manipulation-phrases.ts` | **verbatim** (composition) |
+| `sentinel-scope.ts` / `-capability-vocab.ts` / `-dangerous-params.ts` / `-dangerous-defaults.ts` / `-schema-poisoning.ts` | A2 / A8 / B2 / B7 / J3 data | **verbatim** typed tables |
+| `sentinel-output-poisoning.ts` (J5) | `j5-.../data/config.ts` | **verbatim** directive vocab + gate |
+| `sentinel-encoded.ts` (A9) | `a9-.../{decode.ts, data/*}` | **curated subset** decoder (base64/percent/hex) |
+| `sentinel-confusables.ts` (A6) | `a6-...` UTS‑39 table (~97k tokens) | **curated subset** (mixed‑script gate) |
+| `sentinel-capabilities.ts` (F1/I16) | `analyzers/capability-graph.ts` (~1358 lines) | **curated subset** tagger |
+| `sentinel-registry.ts` | `packages/database/src/rule-registry.ts` | **verbatim** name/severity/OWASP/MITRE/remediation |
 
-Each finding cites the rule it maps to, and the app surfaces the **real Sentinel metadata** for it:
+The 20 rules span **three surfaces**, and every finding cites the rule + surfaces its real Sentinel metadata:
 
-| Observation | Sentinel rule |
+| Surface | Sentinel rules |
 |---|---|
-| Declared‑vs‑observed behavior divergence (witnessed) | **E5** |
-| Look‑alike / homoglyph characters | **A6** |
-| Invisible / bidi control characters | **A7** |
-| Prompt‑injection imperative in the description | **A1** |
-| Tool‑preference manipulation | **J6** |
-| Unconstrained input schema | **B6** |
-| Mid‑session injection / attempted overwrite | **G6 / E5** |
+| **DECLARED metadata** (name/description/schema/annotations) | A1, A2, A6, A7, A8, A9, B2, B6, B7, G2, G5, I1, I2, J3, J6 |
+| **Whole tool set** (page‑level) | F1 lethal trifecta · I16 consent fatigue |
+| **WITNESSED behavior** (runtime) | E5 declared‑vs‑observed · J5 tool‑output poisoning · G6 mid‑session |
 
 **Validated against Sentinel's own red‑team fixtures.** `npm run validate` runs Guardian's ported
-detectors against the *actual* true‑positive / true‑negative strings from Sentinel's A6/A7/A1/J6 fixture
-suite — **22/22**, including Sentinel's *hard negatives* that a substring matcher false‑positives on: the
+detectors against the *actual* true‑positive / true‑negative strings from Sentinel's fixture suite —
+**52/52**, including Sentinel's *hard negatives* that a substring matcher false‑positives on: the
 `always returns the first row` data‑noun trap, the `alwaysOnCache` substring trap, an honest deprecation
-notice (`supersedes … tool … see the migration guide`), and bidi marks in genuine RTL prose.
+notice, a certification that *requires* confirmation (G2 waiver‑inverted), a legitimate percent‑encoding
+doc (A9), an `id_rsa.pub` rotation note (J5), and bidi marks in genuine RTL prose.
 
 Guardian uses the *same severity vocabulary* as Sentinel, but it does **not** produce a risk score — the
 verdict comes from **witnessed behavior**, not a points total. A curated subset means a look‑alike outside

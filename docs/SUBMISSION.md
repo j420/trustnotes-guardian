@@ -35,17 +35,21 @@ Guardian registers its own agent‑callable tools (`guardian_audit_page`, `guard
 Vite + TypeScript, the `@mcp-b/global` WebMCP polyfill, and `ajv` for validation — a pure client‑side
 build, no backend. The core is a `registerTool` wrapper that swaps each tool's `execute` for a guarded
 one (proven to intercept every execution path against the real polyfill source), plus global
-instrumentation that attributes side effects to the currently‑executing tool. The static observations
-reuse **real detection data ported from our MCP Sentinel 183‑rule security registry** — the
-invisible‑codepoint catalogue (A7) and injection‑phrase catalogue (A1) *verbatim*, the compositional
-tool‑preference vocabulary (J6), a curated subset of the UTS‑39 confusables (A6), and the rule metadata
-(name / severity / OWASP / MITRE / remediation) surfaced on every finding in the app. It's not a
-keyword scan: Guardian ports Sentinel's *matching strategy* (mixed‑script for A6, class‑gated for A7,
-ordered‑token for A1, operator+referent composition for J6), and `npm run validate` proves it against
-Sentinel's own red‑team fixtures — **22/22**, including Sentinel's hard negatives (the "always returns
-the first row" data‑noun trap, the "alwaysOnCache" substring trap, an honest deprecation notice). The
-deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
-Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (15/15).
+instrumentation that attributes side effects to the currently‑executing tool. Guardian reuses **real
+detection data ported from our MCP Sentinel 183‑rule security registry — 20 rules re‑implemented for the
+browser** across three surfaces: DECLARED metadata (A1/A2/A6/A7/A8/A9/B2/B6/B7/G2/G5/I1/I2/J3/J6), the
+whole tool set (F1 lethal trifecta, I16 consent fatigue), and WITNESSED behavior (E5 declared‑vs‑observed,
+J5 tool‑output poisoning, G6 mid‑session). Several catalogues are *verbatim*; the UTS‑39 confusables (A6),
+the A9 decoder, and the capability graph (F1/I16) are honestly‑labeled curated subsets. It's not a keyword
+scan — Guardian ports Sentinel's *matching strategy* (mixed‑script, class‑gated, ordered‑token,
+operator+referent composition, schema‑shape, capability tagging) — and `npm run validate` proves it
+against Sentinel's own red‑team fixtures: **52/52**, including the hard negatives (the "always returns the
+first row" data‑noun trap, the "alwaysOnCache" substring trap, an honest deprecation notice, a
+certification that *requires* confirmation, a legit percent‑encoding doc, an `id_rsa.pub` rotation note).
+The strongest of the 20 is **J5**: Guardian is uniquely positioned to WITNESS a tool's returned text, so
+it catches an "error" that tells the agent to read `~/.ssh/id_rsa` — something no static scanner can see.
+The deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
+Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (17/17).
 
 ## How this maps to the judging criteria
 - **WebMCP Leverage:** deep, non‑trivial use — Guardian both *wraps* `document.modelContext` (observing

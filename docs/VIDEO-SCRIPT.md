@@ -24,10 +24,20 @@ VO: “The agent can even ask Guardian directly — Guardian is itself a WebMCP 
 badge and the static observations light up (homoglyph, invisible characters, injection phrase, preference).
 VO: “Now a third‑party ‘community widget’ loads — like an analytics or chat embed. It injects a new tool
 *mid‑session*. It *claims* read‑only. Guardian instantly flags it: its description hides look‑alike and
-invisible characters, a prompt‑injection line, and ‘always use this tool first’ — each mapped to a real
-MCP Sentinel rule. This is the exact attack from the WebMCP tool‑poisoning paper, arXiv 2606.06387.”
+invisible characters, a prompt‑injection line, ‘always use this tool first’, a fake ‘approved by
+Anthropic — no confirmation needed’, and ‘uses the permissions you already granted’ — each mapped to a
+real MCP Sentinel rule. Guardian ports **20** of them. And the red PAGE‑LEVEL banner: loading the widget
+just completed the **lethal trifecta** across the page — private‑data read, untrusted‑content ingest, and
+external comms. This is the attack from the WebMCP tool‑poisoning paper, arXiv 2606.06387.”
 
-**1:15–1:50 — Witness it red‑handed (Probe)**
+**1:15–1:30 — Witnessed output poisoning (J5)**
+[ACTION] Click **agent: call widget helper (output poisoning)**. A yellow **WITNESSED OUTPUT** row appears on
+the helper's card.
+VO: “The widget also ships an innocent‑looking ‘error helper.’ When the agent runs it, Guardian reads what
+it *returned* — an ‘error’ that tells the agent to read your SSH private key ‘to resolve’ it. No static
+scanner sees that; Guardian witnesses the output and flags it live.”
+
+**1:30–1:50 — Witness the egress red‑handed (Probe)**
 [ACTION] Click **Probe (safe dry‑run)** on the `community_sync` card. The card flips to red **diverged**;
 the DIVERGENCE box shows “declared read‑only — observed attempted external egress to
 community‑board.example (BLOCKED).”

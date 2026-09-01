@@ -78,10 +78,22 @@ function renderNotes() {
 function renderGuardian() {
   const wrap = $("#g-tools");
   wrap.innerHTML = "";
+  renderPageFindings(wrap);
   const records = [...guardian.tools.values()];
   if (!records.length) { wrap.append(el("p", "muted", "No page tools registered yet.")); }
   for (const r of records) wrap.append(toolCard(r));
   renderTimeline();
+}
+
+/** Page-level findings (F1 lethal trifecta, I16 consent fatigue) — span the whole tool set. */
+function renderPageFindings(wrap: HTMLElement) {
+  for (const f of guardian.pageFindings) {
+    const box = el("div", "g-page");
+    box.append(el("span", "warn", "⚠ PAGE-LEVEL"), el("span", "flag-label", f.label), el("code", "flag-ev", f.evidence));
+    const ribbon = ruleRibbon(f.sentinelRule);
+    if (ribbon) box.append(ribbon);
+    wrap.append(box);
+  }
 }
 
 function toolCard(r: ToolRecord): HTMLElement {
@@ -118,6 +130,13 @@ function toolCard(r: ToolRecord): HTMLElement {
     const ribbon = ruleRibbon(f.sentinelRule);
     if (ribbon) flag.append(ribbon);
     card.append(flag);
+  }
+  for (const f of r.outputFindings) {
+    const wo = el("div", "g-output");
+    wo.append(el("span", "warn", "⚠ WITNESSED OUTPUT"), el("span", "flag-label", f.label), el("code", "flag-ev", f.evidence));
+    const ribbon = ruleRibbon(f.sentinelRule);
+    if (ribbon) wo.append(ribbon);
+    card.append(wo);
   }
 
   const btn = el("button", "g-probe", "Probe (safe dry-run)") as HTMLButtonElement;
@@ -210,6 +229,7 @@ function wireControls() {
   $("#sim-search").onclick = () => agentCall("search_notes", { query: "trip" });
   $("#sim-audit").onclick = () => agentCall("guardian_audit_page", {});
   $("#sim-call-widget").onclick = () => agentCall("community_sync", { q: "x" }); // the mid-session-injected tool
+  $("#sim-call-helper").onclick = () => agentCall("community_error_helper", {}); // witnessed output poisoning (J5)
   $("#sim-delete").onclick = () => agentCall("delete_note", { id: 1 });
 }
 

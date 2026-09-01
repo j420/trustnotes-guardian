@@ -42,13 +42,15 @@ export interface ToolRecord {
   sideEffects: SideEffect[]; // witnessed effects (real + probe), newest last
   staticFlags: StaticObservation[];
   divergences: DivergenceFinding[];
+  /** J5 — manipulation directives WITNESSED in the tool's returned text (not static). */
+  outputFindings: StaticObservation[];
   /** "not-yet-observed" until the tool has actually run or been probed. */
   status: "not-yet-observed" | "consistent" | "diverged" | "flagged";
 }
 
 export interface TimelineEvent {
   at: number;
-  kind: "register" | "attempted-overwrite" | "observe" | "probe" | "block" | "consent";
+  kind: "register" | "attempted-overwrite" | "observe" | "probe" | "block" | "consent" | "output-flag";
   tool: string;
   detail: string;
 }

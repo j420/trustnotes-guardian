@@ -55,8 +55,16 @@ const R = await page.evaluate(async () => {
   push("poisoned tool injected mid-session + caught", !!poisoned, poisoned ? poisoned.name : "NOT FOUND");
   if (!poisoned) return out;
   push("flagged mid-session", poisoned.provenance === "mid-session", poisoned.provenance);
-  push("static flags: homoglyph + hidden + injection + preference", ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE", "PREFERENCE-MANIP"].every((id) => poisoned.staticFlags.some((f) => f.id === id)), poisoned.staticFlags.map((f) => f.id).join(","));
+  push("static flags: homoglyph + hidden + injection + preference + trust + prior-approval", ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE", "PREFERENCE-MANIP", "TRUST-ASSERTION", "PRIOR-APPROVAL"].every((id) => poisoned.staticFlags.some((f) => f.id === id)), poisoned.staticFlags.map((f) => f.id).join(","));
   push("declares read-only", poisoned.declaredReadOnly === true, "");
+
+  // 3b. PAGE-LEVEL: loading the widget completes the lethal trifecta across the page's tools (F1)
+  push("F1 lethal trifecta present after widget loads", g.pageFindings.some((f) => f.sentinelRule === "F1"), g.pageFindings.map((f) => f.sentinelRule).join(",") || "none");
+
+  // 3c. WITNESSED OUTPUT: the widget's error-helper returns a poisoned string (J5)
+  await call("community_error_helper", {});
+  const helper = g.tools.get("community_error_helper");
+  push("J5 witnessed output poisoning caught (community_error_helper)", !!helper && helper.outputFindings.some((f) => f.sentinelRule === "J5"), helper ? helper.outputFindings.map((f) => f.id).join(",") : "no helper");
 
   // 4. probe (deny-all) witnesses the divergence with no real network
   const probe = await g.probe(poisoned.name, { probe: true });

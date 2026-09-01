@@ -11,9 +11,9 @@
  *  - registers its OWN agent-callable tools (guardian_audit_page / probe_tool / explain_tool)
  */
 import Ajv2020 from "ajv/dist/2020";
-import type { DivergenceFinding, SideEffect, TimelineEvent, ToolRecord, WebMcpTool } from "./types.js";
+import type { DivergenceFinding, SideEffect, StaticObservation, TimelineEvent, ToolRecord, WebMcpTool } from "./types.js";
 import { installInstrumentation, withActiveTool } from "./observe.js";
-import { declaresReadOnly, staticObservations } from "./static-flags.js";
+import { declaresReadOnly, staticObservations, pageObservations, outputObservations } from "./static-flags.js";
 
 const ajv = new (Ajv2020 as any)({ strict: false, allErrors: true });
 
@@ -23,7 +23,11 @@ export type ConsentHandler = (req: ConsentRequest) => Promise<boolean>;
 export class Guardian extends EventTarget {
   readonly tools = new Map<string, ToolRecord>();
   readonly timeline: TimelineEvent[] = [];
+  /** Page-level findings (F1 lethal trifecta, I16 consent fatigue) across the whole tool set. */
+  pageFindings: StaticObservation[] = [];
   private origExecute = new Map<string, (a: any) => any>();
+  /** Minimal descriptors kept for page-level (F1/I16) recomputation — includes annotations. */
+  private descriptors = new Map<string, Pick<WebMcpTool, "name" | "description" | "inputSchema" | "annotations">>();
   private validators = new Map<string, (a: any) => boolean>();
   private loadWindowClosed = false;
   /** false only if a native browser locked registerTool so Guardian couldn't wrap it. */
@@ -93,13 +97,22 @@ export class Guardian extends EventTarget {
       sideEffects: [],
       staticFlags: flags,
       divergences: [],
+      outputFindings: [],
       status: "not-yet-observed",
     };
     this.tools.set(tool.name, rec);
+    this.descriptors.set(tool.name, { name: tool.name, description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations });
     if (tool.inputSchema && typeof tool.inputSchema === "object") {
       try { this.validators.set(tool.name, ajv.compile(tool.inputSchema)); } catch { /* tolerate odd schemas */ }
     }
+    this.recomputePageFindings();
     this.log({ kind: "register", tool: tool.name, detail: `${rec.provenance} registration${flags.length ? " · static flags: " + flags.map((f) => f.id).join(", ") : ""}` });
+  }
+
+  /** Recompute page-level (F1/I16) findings across the current tool set (excludes Guardian's own tools). */
+  private recomputePageFindings() {
+    const pageTools = [...this.descriptors.values()].filter((d) => !(d.name || "").startsWith("guardian_"));
+    this.pageFindings = pageObservations(pageTools);
   }
 
   /** DECLARED vs OBSERVED: derive divergences from the effects seen in a run/probe. */
@@ -131,7 +144,7 @@ export class Guardian extends EventTarget {
 
   private needsConsent(rec: ToolRecord): string | null {
     if (rec.status === "diverged" || rec.status === "flagged") return "this tool has a witnessed divergence or was flagged";
-    if (rec.staticFlags.some((f) => ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE"].includes(f.id))) return "this tool's metadata contains deceptive signals";
+    if (rec.staticFlags.some((f) => ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE", "ENCODED-INSTRUCTION", "TRUST-ASSERTION", "PRIOR-APPROVAL", "CAPABILITY-MISMATCH", "SCHEMA-POISON"].includes(f.id))) return "this tool's metadata contains deceptive signals";
     if (!rec.declaredReadOnly && /delete|remove|drop|overwrite|purge|wipe/i.test(rec.name + " " + rec.description)) return "this tool declares a destructive action";
     return null;
   }
@@ -156,6 +169,7 @@ export class Guardian extends EventTarget {
     rec.observedRuns++;
     rec.sideEffects.push(...effects);
     this.mergeDivergences(rec, this.diverge(rec, effects));
+    this.scanOutput(rec, result); // J5 — witnessed tool-output poisoning
     const blocked = effects.filter((e) => e.blocked);
     if (blocked.length) this.log({ kind: "block", tool: name, detail: `blocked external egress: ${blocked.map((e) => shortHost(e.detail)).join(", ")}` });
     this.log({ kind: "observe", tool: name, detail: describeEffects(effects) });
@@ -164,16 +178,30 @@ export class Guardian extends EventTarget {
     return result;
   }
 
+  /** J5 — scan a tool's returned text for reader-directed manipulation directives. */
+  private scanOutput(rec: ToolRecord, result: any) {
+    const text = extractOutputText(result);
+    if (!text) return;
+    for (const f of outputObservations(text)) {
+      if (!rec.outputFindings.some((x) => x.id === f.id && x.evidence === f.evidence)) {
+        rec.outputFindings.push(f);
+        rec.status = "flagged";
+        this.log({ kind: "output-flag", tool: rec.name, detail: `${f.sentinelRule}: ${f.label}` });
+      }
+    }
+  }
+
   /** Probe: witness what a tool WOULD do, under deny-all, with no real effect. */
   async probe(name: string, canaryArgs: unknown = {}): Promise<{ effects: SideEffect[]; divergences: DivergenceFinding[] }> {
     const rec = this.tools.get(name);
     const orig = this.origExecute.get(name);
     if (!rec || !orig) return { effects: [], divergences: [] };
-    const { effects } = await withActiveTool(name, "deny-all", () => orig(canaryArgs));
+    const { result, effects } = await withActiveTool(name, "deny-all", () => orig(canaryArgs));
     rec.probeRuns++;
     rec.sideEffects.push(...effects);
     const div = this.diverge(rec, effects);
     this.mergeDivergences(rec, div);
+    this.scanOutput(rec, result); // J5 — witness poisoned output under deny-all too
     this.log({ kind: "probe", tool: name, detail: describeEffects(effects) + (div.length ? " · DIVERGENCE: " + div[0].observed : "") });
     this.emit();
     return { effects, divergences: div };
@@ -186,7 +214,7 @@ export class Guardian extends EventTarget {
       name: "guardian_audit_page",
       description: "Guardian: report every tool on this page — DECLARED vs OBSERVED behavior, static observations, and when each was registered. Use this to decide if the page's tools are safe.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
-      execute: async () => text({ tools: [...this.tools.values()].map(summary), timeline: this.timeline.slice(-12) }),
+      execute: async () => text({ tools: [...this.tools.values()].map(summary), page_findings: this.pageFindings.map((f) => `${f.sentinelRule}: ${f.label}`), timeline: this.timeline.slice(-12) }),
     });
     origRegister({
       name: "guardian_probe_tool",
@@ -205,7 +233,7 @@ export class Guardian extends EventTarget {
 }
 
 function summary(r: ToolRecord) {
-  return { name: r.name, declaredReadOnly: r.declaredReadOnly, provenance: r.provenance, status: r.status, observedRuns: r.observedRuns, staticFlags: r.staticFlags.map((f) => f.id), divergences: r.divergences.map((d) => d.observed) };
+  return { name: r.name, declaredReadOnly: r.declaredReadOnly, provenance: r.provenance, status: r.status, observedRuns: r.observedRuns, staticFlags: r.staticFlags.map((f) => f.id), outputFindings: r.outputFindings.map((f) => f.id), divergences: r.divergences.map((d) => d.observed) };
 }
 function describeEffects(effects: SideEffect[]): string {
   if (!effects.length) return "no side effects observed";
@@ -215,6 +243,14 @@ function describeEffects(effects: SideEffect[]): string {
   return parts.join(" · ");
 }
 function shortHost(url: string) { try { return new URL(url, location.href).host; } catch { return url; } }
+/** Pull the readable text out of a CallToolResult-shaped return value. */
+function extractOutputText(result: any): string {
+  if (result == null) return "";
+  if (typeof result === "string") return result;
+  const parts = Array.isArray(result?.content) ? result.content : [];
+  const texts = parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).filter(Boolean);
+  return texts.length ? texts.join("\n") : "";
+}
 function cfgWarn(msg: string) { try { console.warn("[Guardian] " + msg); } catch { /* noop */ } }
 
 /**
