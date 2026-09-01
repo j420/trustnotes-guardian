@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4319 --strictPort",
-    "spike": "vite build && node run-spike.mjs",
+    "spike": "vite build --config vite.spike.config.ts && node run-spike.mjs",
     "e2e": "vite build && node e2e.mjs",
     "typecheck": "tsc --noEmit"
   }

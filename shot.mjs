@@ -1,0 +1,21 @@
+import { chromium } from "playwright";
+import http from "node:http"; import { readFile } from "node:fs/promises"; import { extname, join, normalize } from "node:path";
+const DIST = new URL("./dist/", import.meta.url).pathname;
+const srv = http.createServer(async (rq,rs)=>{try{let p=decodeURIComponent((rq.url||"/").split("?")[0]); if(p==="/")p="/index.html"; const f=join(DIST,normalize(p)); const b=await readFile(f); rs.writeHead(200,{"content-type":{".html":"text/html",".js":"text/javascript",".css":"text/css"}[extname(f)]||"application/octet-stream"}); rs.end(b);}catch{rs.writeHead(404);rs.end();}});
+await new Promise(r=>srv.listen(4321,r));
+const b = await chromium.launch({headless:true, executablePath:"/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args:["--no-sandbox","--disable-dev-shm-usage"]});
+const pg = await b.newPage({viewport:{width:1200,height:900}, deviceScaleFactor:2});
+await pg.goto("http://localhost:4321/",{waitUntil:"networkidle"});
+await pg.waitForFunction(()=>window.__guardian && window.__guardian.tools.size>=4);
+await pg.evaluate(async()=>{ const mc=document.modelContext; const t=(await mc.getTools()).find(x=>x.name==="search_notes"); await mc.executeTool(t, JSON.stringify({query:"trip"}), {}); });
+await pg.waitForTimeout(300);
+await pg.screenshot({path:"/home/user/guardian-1-clean.png", fullPage:true});
+// trigger attack + probe
+await pg.waitForTimeout(1400);
+await pg.evaluate(async()=>{ await new Promise(res=>{const s=document.createElement("script"); s.src="/community-widget.js?ts="+Date.now(); s.onload=res; s.onerror=res; document.body.append(s);}); });
+await pg.waitForTimeout(400);
+await pg.evaluate(async()=>{ const p=[...window.__guardian.tools.values()].find(r=>r.provenance==="mid-session"); await window.__guardian.probe(p.name,{probe:true,q:"canary"}); });
+await pg.waitForTimeout(300);
+await pg.screenshot({path:"/home/user/guardian-2-attack-caught.png", fullPage:true});
+await b.close(); srv.close();
+console.log("shots written");

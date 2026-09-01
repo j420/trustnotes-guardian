@@ -4,7 +4,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
-const DIST = new URL("./dist/", import.meta.url).pathname;
+const DIST = new URL("./dist-spike/", import.meta.url).pathname;
 const PORT = 4319;
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".map": "application/json", ".svg": "image/svg+xml", ".json": "application/json" };
 
