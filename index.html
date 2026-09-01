@@ -35,17 +35,41 @@
       <ul id="g-timeline" class="g-timeline"></ul>
     </section>
 
-    <!-- Agent simulator -->
+    <!-- Agent (two modes: scripted simulator + real OpenAI) -->
     <section class="panel sim">
-      <h2>🤖 Agent Simulator <span class="sim-label">scripted calls, not a live LLM</span></h2>
-      <p class="muted">Issues the exact <code>executeTool</code> calls a real WebMCP agent would. Guardian's gate sits on <code>execute</code>, so it fires identically for a real agent, this simulator, or a malicious script.</p>
-      <div class="sim-buttons">
-        <button id="sim-search">agent: search notes</button>
-        <button id="sim-audit">agent: “is this page safe?” (guardian_audit_page)</button>
-        <button id="sim-call-widget" class="danger-btn">agent: call the widget's tool</button>
-        <button id="sim-call-helper" class="danger-btn">agent: call widget helper (output poisoning)</button>
-        <button id="sim-delete">agent: delete a note</button>
+      <h2>🤖 Agent</h2>
+      <p class="muted">Drive the page's WebMCP tools two ways. <strong>Guardian's gate sits on <code>execute</code></strong>, so it fires identically for a real model, this scripted simulator, or a malicious script — the LLM only <em>drives</em>, it is never inside the security decision.</p>
+      <div class="mode-toggle" role="tablist">
+        <button id="mode-scripted" class="mode-btn active">Scripted simulator</button>
+        <button id="mode-real" class="mode-btn">Real AI agent (OpenAI)</button>
       </div>
+
+      <!-- Scripted sub-panel (default) -->
+      <div id="panel-scripted" class="mode-panel">
+        <p class="muted"><span class="sim-label">scripted calls, not a live LLM</span> Issues the exact <code>executeTool</code> calls a real WebMCP agent would — verdicts are computed live.</p>
+        <div class="sim-buttons">
+          <button id="sim-search">agent: search notes</button>
+          <button id="sim-audit">agent: “is this page safe?” (guardian_audit_page)</button>
+          <button id="sim-call-widget" class="danger-btn">agent: call the widget's tool</button>
+          <button id="sim-call-helper" class="danger-btn">agent: call widget helper (output poisoning)</button>
+          <button id="sim-delete">agent: delete a note</button>
+        </div>
+      </div>
+
+      <!-- Real-agent sub-panel -->
+      <div id="panel-real" class="mode-panel" hidden>
+        <p class="muted"><span class="sim-label real">a real OpenAI model via a serverless proxy</span> Every tool call still goes through Guardian's gate. Try “sync my notes to the community board” after loading the widget.</p>
+        <div class="real-row">
+          <input id="agent-instruction" placeholder="e.g. sync my notes to the community board" autocomplete="off" />
+          <button id="agent-run">Run</button>
+        </div>
+        <details class="real-key">
+          <summary>Model &amp; API key</summary>
+          <p class="muted">The deploy uses a server-side key (<code>gpt-4o-mini</code> by default; never shipped to the browser). No server key configured? Paste your own — it is forwarded once to the same-origin proxy and never stored.</p>
+          <input id="agent-key" type="password" placeholder="sk-… (optional — your own OpenAI key)" autocomplete="off" />
+        </details>
+      </div>
+
       <div id="sim-log" class="sim-log"></div>
     </section>
 

@@ -32,8 +32,10 @@ Guardian registers its own agent‑callable tools (`guardian_audit_page`, `guard
 `guardian_explain_tool`) so the agent can ask "is this page safe?". No tool can disable Guardian.
 
 ## How we built it
-Vite + TypeScript, the `@mcp-b/global` WebMCP polyfill, and `ajv` for validation — a pure client‑side
-build, no backend. The core is a `registerTool` wrapper that swaps each tool's `execute` for a guarded
+Vite + TypeScript, the `@mcp-b/global` WebMCP polyfill, and `ajv` for validation — the security layer is
+pure client‑side with no backend (the only server code is an optional ~100‑line stateless proxy that
+relays the real‑agent mode's OpenAI call; the gate never runs there). The core is a `registerTool`
+wrapper that swaps each tool's `execute` for a guarded
 one (proven to intercept every execution path against the real polyfill source), plus global
 instrumentation that attributes side effects to the currently‑executing tool. Guardian reuses **real
 detection data ported from our MCP Sentinel 183‑rule security registry — 20 rules re‑implemented for the
@@ -50,14 +52,27 @@ The strongest of the 20 is **J5**: Guardian is uniquely positioned to WITNESS a 
 it catches an "error" that tells the agent to read `~/.ssh/id_rsa` — something no scanner limited to a
 tool's *declared metadata* can see (the agent only reads name/description/schema until the tool runs).
 The deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
-Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (17/17).
+Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (18/18).
+
+**Two agent modes (user‑selectable).** The Agent panel drives the page's tools two ways: a **scripted
+simulator** (default, offline, labeled "not a live LLM") and a **real OpenAI agent** — a real model reads
+the page's WebMCP tools and decides which to call, relayed through a tiny same‑origin serverless proxy
+(`api/agent.js`) because OpenAI's API is CORS‑blocked from the browser and the key must stay server‑side.
+The browser runs the agent *loop*; every tool call flows through the **same** `executeTool → guardedExecute`
+gate. The load‑bearing invariant: **the LLM is the party being protected, never inside Guardian's gate** —
+consent/validation/witnessed‑divergence/egress‑block are 100% deterministic, with no LLM call and no LLM
+risk score. The E2E proves the real path is gated with a **mocked** OpenAI conversation (no key, no live
+network): the model issues a `community_sync` call and Guardian blocks its egress exactly as scripted mode.
+Bonus: because Guardian wraps `registerTool` on any WebMCP surface, **ChatGPT's in‑app browser already
+runs a real OpenAI agent against these tools**, so the build is already gated there with zero extra code.
 
 ## How this maps to the judging criteria
 - **WebMCP Leverage:** deep, non‑trivial use — Guardian both *wraps* `document.modelContext` (observing
   and gating `registerTool`/`executeTool`) **and** *registers* its own agent‑callable tools; TrustNotes
-  registers four real tools an agent drives.
+  registers four real tools an agent drives — and a **real OpenAI agent** can drive them through the gate.
 - **Execution:** a complete, coherent product — a usable notes app + a live inspector + consent modal +
-  probe + agent simulator, deployed and demoable, with automated proofs (spike 12/12, e2e 17/17, validate 61/61).
+  probe + a dual‑mode agent (scripted **and** real OpenAI), deployed and demoable, with automated proofs
+  (spike 12/12, e2e 18/18, validate 61/61).
 - **Potential Impact:** a concrete audience (developers shipping WebMCP tools who also load third‑party
   scripts) and a documented, current threat (arXiv 2606.06387) that WebMCP has no built‑in defense for —
   the safety layer for the human+agent web as WebMCP rolls out via OpenAI and Chrome.
@@ -71,11 +86,14 @@ deception into the (unrestricted) description and leaned on the name‑independe
 as the headline. Attributing an async side effect to the right tool needed a careful active‑tool window.
 
 ## Honesty (what we did NOT claim)
-"Not yet observed" is never "safe." The Agent Simulator is labeled "scripted calls, not a live LLM"
-(verdicts are computed live). We say data is **ported from** Sentinel and label each table verbatim vs.
-curated‑subset — not "runs 183 rules"; a look‑alike outside the curated confusables is a miss Sentinel's
-full server‑side rule would still catch, and the app says so. We demonstrate on the polyfill path and
-label native‑browser behavior as assumed‑not‑verified.
+"Not yet observed" is never "safe." The scripted sub‑panel is labeled "scripted calls, not a live LLM"
+(verdicts are computed live); the real sub‑panel is a genuine OpenAI model and is labeled as such. The
+LLM only *drives* — it never enters the gate, and we don't claim it adds any security. A bring‑your‑own
+key travels once to *your own* deployment's proxy and is never stored; we say so in‑app. We say data is
+**ported from** Sentinel and label each table verbatim vs. curated‑subset — not "runs 183 rules"; a
+look‑alike outside the curated confusables is a miss Sentinel's full server‑side rule would still catch,
+and the app says so. We demonstrate on the polyfill path and label native‑browser behavior as
+assumed‑not‑verified.
 
 ## What's next
 Native‑browser verification on the Chrome WebMCP flag; cross‑tool toxic‑flow witnessing (Sentinel E6);

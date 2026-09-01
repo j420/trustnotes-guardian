@@ -66,8 +66,23 @@ button:hover { border-color: var(--accent); }
 .tl-tool { font-family: ui-monospace, monospace; color: var(--muted); } .tl-detail { color: var(--ink); }
 
 /* Agent sim */
-.sim-label { font-size: 10px; background: #3a2b0a; color: var(--warn); padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle; letter-spacing: .3px; }
+.sim-label { font-size: 10px; background: #3a2b0a; color: var(--warn); padding: 2px 8px; border-radius: 10px; margin-right: 6px; vertical-align: middle; letter-spacing: .3px; }
+.sim-label.real { background: #10233f; color: #9fc0ff; }
 .sim-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+
+/* mode toggle + real-agent sub-panel */
+.mode-toggle { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.mode-btn { border: 0; border-radius: 0; background: var(--panel2); color: var(--muted); padding: 7px 14px; }
+.mode-btn + .mode-btn { border-left: 1px solid var(--line); }
+.mode-btn.active { background: #16233f; color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.mode-btn:hover { border-color: transparent; color: var(--ink); }
+.mode-panel[hidden] { display: none; }
+.real-row { display: flex; gap: 8px; margin: 8px 0; }
+.real-row input { flex: 1; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 8px 10px; }
+.real-key { margin: 4px 0 8px; }
+.real-key summary { color: var(--muted); font-size: 11px; cursor: pointer; }
+.real-key p { margin: 6px 0; }
+.real-key input { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 7px 10px; }
 .sim-log { background: #0b0f18; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; height: 150px; overflow: auto; }
 .sim-line { padding: 1px 0; white-space: pre-wrap; }
 .sim-line.ok { color: var(--ok); } .sim-line.err { color: var(--danger); } .sim-line.warn { color: var(--warn); }

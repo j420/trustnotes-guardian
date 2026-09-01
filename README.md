@@ -107,12 +107,43 @@ npm run dev        # open the printed localhost URL
 npm run build      # static production build → dist/
 npm run typecheck  # tsc --noEmit
 npm run spike      # Phase-0 mechanics proof (headless Chromium) — 12/12
-npm run e2e        # full demo flow proof (headless Chromium) — 17/17
+npm run e2e        # full demo flow proof (headless Chromium) — 18/18
 npm run validate   # ported detectors vs Sentinel's own red-team fixtures — 61/61
 ```
 
 Runs in any modern browser via the **`@mcp-b/global`** WebMCP polyfill; also runs under native WebMCP
 in Chrome (behind the WebMCP flag) and ChatGPT's in‑app browser.
+
+## Two agent modes (the LLM drives; Guardian gates deterministically)
+
+The Agent panel offers **two ways** to drive the page's tools, and the demo operator picks the mode:
+
+- **Scripted simulator** (default, always works offline) — issues the exact `executeTool` calls a real
+  WebMCP agent would. No key, no network. Labeled on‑screen *“scripted calls, not a live LLM.”*
+- **Real AI agent (OpenAI)** — a real OpenAI model **drives** the app: it reads the page's WebMCP tools,
+  decides which to call, and Guardian gates every call. Because OpenAI's API is CORS‑blocked from the
+  browser and the key must stay server‑side, the model call goes through a tiny same‑origin serverless
+  proxy (`api/agent.js`, Vercel‑auto‑detected). The browser runs the agent **loop**; each tool call still
+  flows through the *same* `executeTool → guardedExecute` path the scripted mode uses.
+
+**Invariant — the LLM is the party being *protected*, never part of the gate.** Guardian's
+consent / validation / witnessed‑divergence / live‑egress‑block logic is 100% deterministic and contains
+**no LLM call and no LLM risk score**. Swapping a scripted driver for a real model changes *who calls the
+tools*, not *how they're judged* — the `e2e` suite proves this with a **mocked** OpenAI conversation
+(no key, no live network): the model issues a `community_sync` tool call and Guardian blocks its egress
+exactly as in the scripted path.
+
+**Setup (real mode):** deploy to Vercel (or `vercel dev`) with `OPENAI_API_KEY` set (optionally
+`OPENAI_MODEL`, default `gpt-4o-mini`); see [`.env.example`](.env.example). No server key? The panel
+reveals a **bring‑your‑own‑key** field — the key is forwarded once to the same‑origin proxy and **never
+stored**; on a public deploy the proxy is hardened against denial‑of‑wallet (forced `max_tokens`, a
+pinned model allowlist on the server key, a same‑site origin check, and a per‑IP rate limit).
+**Key‑transit caveat:** a BYO key travels to *your own* deployment's proxy in one request and is used
+only to relay that call to OpenAI; prefer the server‑env key on shared deploys.
+
+**Zero‑code bonus:** because Guardian wraps `registerTool` on any WebMCP surface, **ChatGPT's in‑app
+browser already runs a real OpenAI agent against these tools** — so the current build is *already* gated
+there, no proxy needed. That's the strongest optional demo clip (best‑effort, nondeterministic).
 
 ### Add Guardian to your own WebMCP page
 ```ts
@@ -125,7 +156,9 @@ guardian.install(document.modelContext); // BEFORE you register your own tools
 - **Verified** (in real headless Chromium, against the real `@mcp-b` polyfill): interception on the
   `executeTool` + testing‑shim paths; a `fetch` inside `execute` attributed to its tool and blocked;
   duplicate‑name `InvalidStateError`; the probe witnessing a blocked egress with no real network; Ajv
-  validation in the production build. (`npm run spike` = 12/12, `npm run e2e` = 17/17.)
+  validation in the production build; and the **real‑agent path gated on a mocked OpenAI conversation**
+  (the model's tool call blocked at the same gate, no key/network). (`npm run spike` = 12/12,
+  `npm run e2e` = 18/18.)
 - **Assumed, not verified**: behavior on a *native* flag‑gated browser build (property writability,
   agent access) — we demonstrate on the polyfill path, which is today's real target. Side‑effect
   attribution is within a tool's execution window; an effect a tool defers past its own return is

@@ -3,6 +3,7 @@ import { guardian } from "../guardian/index.js";
 import type { ToolRecord } from "../guardian/types.js";
 import { getNotes, onNotesChange } from "../app/trustnotes.js";
 import { ruleMeta, SENTINEL_RULES } from "../guardian/data/sentinel-registry.js";
+import { runRealAgent } from "../agent/openai-agent.js";
 
 const $ = (sel: string, root: ParentNode = document) => root.querySelector(sel) as HTMLElement;
 const el = (tag: string, cls?: string, txt?: string) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
@@ -193,47 +194,118 @@ function consentModal(req: { record: ToolRecord; args: unknown; reason: string }
 }
 function kv(k: string, v: string) { const d = el("div", "kv"); d.append(el("span", "kv-k", k), el("span", "kv-v", v)); return d; }
 
-// ---------- agent simulator + controls ----------
-async function agentCall(name: string, args: unknown): Promise<string> {
-  const mc: any = (document as any).modelContext;
-  const tools = await mc.getTools();
-  const tool = tools.find((t: any) => t.name === name);
-  logSim(`agent → ${name}(${JSON.stringify(args)})`);
+// ---------- agent driver (shared by BOTH modes) + controls ----------
+/**
+ * THE shared, gated dispatch path. Both the scripted simulator and the real OpenAI agent
+ * route every tool call through here → `document.modelContext.executeTool` → Guardian's
+ * `guardedExecute`. `argsJson` is a JSON string (the polyfill's executeTool requires the
+ * LIVE tool descriptor, so we `find` it rather than synthesize one). Returns the tool's
+ * textual result; never throws (a blocked/errored call is logged and returned as text).
+ */
+async function execViaGuardian(realName: string, argsJson: string): Promise<string> {
+  const mc: any = (document as any).modelContext ?? (navigator as any).modelContext;
+  logSim(`agent → ${realName}(${trim(argsJson, 120)})`);
   try {
+    const tools = await mc.getTools();
+    const tool = tools.find((t: any) => t.name === realName);
     const res = tool
-      ? await mc.executeTool(tool, JSON.stringify(args), {})
-      : await (navigator as any).modelContextTesting?.executeTool(name, JSON.stringify(args));
+      ? await mc.executeTool(tool, argsJson, {})
+      : await (navigator as any).modelContextTesting?.executeTool(realName, argsJson);
     // executeTool returns a JSON STRING (serializeChromeToolResult), so parse before
     // reading .content/.isError — otherwise a Guardian-DENIED call renders green "ok".
     const parsed = typeof res === "string" ? safeJson(res) : res;
     const out = parsed?.content?.[0]?.text ?? (typeof res === "string" ? res : JSON.stringify(res));
-    logSim(`  ↳ ${trim(out, 160)}`, parsed?.isError ? "err" : "ok");
-    return out;
+    logSim(`  ↳ ${trim(String(out), 160)}`, parsed?.isError ? "err" : "ok");
+    return typeof out === "string" ? out : JSON.stringify(out);
   } catch (e: any) {
-    logSim(`  ↳ blocked/error: ${e?.message || e}`, "err");
-    return String(e);
+    const m = `blocked/error: ${e?.message || e}`;
+    logSim(`  ↳ ${m}`, "err");
+    return m;
   }
 }
-function logSim(line: string, cls = "") { const log = $("#sim-log"); const row = el("div", "sim-line " + cls, line); log.append(row); log.scrollTop = log.scrollHeight; }
+
+/** Scripted-simulator convenience: the buttons call this with a JS object. */
+function agentCall(name: string, args: unknown): Promise<string> {
+  return execViaGuardian(name, JSON.stringify(args));
+}
+
+function logSim(line: string, cls = "") {
+  const log = document.querySelector("#sim-log");
+  if (!log) return;
+  const row = el("div", "sim-line " + cls, line);
+  log.append(row);
+  log.scrollTop = log.scrollHeight;
+}
 
 function wireControls() {
-  ($("#tn-add-form") as HTMLFormElement).onsubmit = (e) => {
+  // Every lookup is null-guarded: a missing element must never reject boot (mountUI is now
+  // wrapped in try/catch too), and the toggle adds NEW ids without disturbing the existing ones.
+  const form = document.querySelector("#tn-add-form") as HTMLFormElement | null;
+  if (form) form.onsubmit = (e) => {
     e.preventDefault();
-    const inp = $("#tn-add-input") as HTMLInputElement;
-    if (inp.value.trim()) agentCall("add_note", { text: inp.value.trim() });
-    inp.value = "";
+    const inp = document.querySelector("#tn-add-input") as HTMLInputElement | null;
+    if (inp && inp.value.trim()) agentCall("add_note", { text: inp.value.trim() });
+    if (inp) inp.value = "";
   };
-  $("#load-widget").onclick = () => {
+  bindClick("#load-widget", () => {
     const s = document.createElement("script");
     s.src = "/community-widget.js?ts=" + Date.now();
     document.body.append(s);
     logSim("⚠ loaded third-party 'community widget' (untrusted embed)", "warn");
-  };
-  $("#sim-search").onclick = () => agentCall("search_notes", { query: "trip" });
-  $("#sim-audit").onclick = () => agentCall("guardian_audit_page", {});
-  $("#sim-call-widget").onclick = () => agentCall("community_sync", { q: "x" }); // the mid-session-injected tool
-  $("#sim-call-helper").onclick = () => agentCall("community_error_helper", {}); // witnessed output poisoning (J5)
-  $("#sim-delete").onclick = () => agentCall("delete_note", { id: 1 });
+  });
+  bindClick("#sim-search", () => void agentCall("search_notes", { query: "trip" }));
+  bindClick("#sim-audit", () => void agentCall("guardian_audit_page", {}));
+  bindClick("#sim-call-widget", () => void agentCall("community_sync", { q: "x" })); // the mid-session-injected tool
+  bindClick("#sim-call-helper", () => void agentCall("community_error_helper", {})); // witnessed output poisoning (J5)
+  bindClick("#sim-delete", () => void agentCall("delete_note", { id: 1 }));
+  wireAgentMode();
+}
+
+function bindClick(sel: string, fn: () => void) {
+  const b = document.querySelector(sel) as HTMLButtonElement | null;
+  if (b) b.onclick = fn;
+}
+
+/** Segmented Scripted ↔ Real toggle + the real-agent Run handler. All null-guarded. */
+function wireAgentMode() {
+  const scriptedBtn = document.querySelector("#mode-scripted") as HTMLButtonElement | null;
+  const realBtn = document.querySelector("#mode-real") as HTMLButtonElement | null;
+  const scriptedPanel = document.querySelector("#panel-scripted") as HTMLElement | null;
+  const realPanel = document.querySelector("#panel-real") as HTMLElement | null;
+  if (scriptedBtn && realBtn && scriptedPanel && realPanel) {
+    const setMode = (real: boolean) => {
+      realBtn.classList.toggle("active", real);
+      scriptedBtn.classList.toggle("active", !real);
+      realPanel.hidden = !real;
+      scriptedPanel.hidden = real;
+    };
+    scriptedBtn.onclick = () => setMode(false);
+    realBtn.onclick = () => setMode(true);
+  }
+  const runBtn = document.querySelector("#agent-run") as HTMLButtonElement | null;
+  if (runBtn) runBtn.onclick = () => void runAgentFromUI(runBtn);
+}
+
+/** Read the instruction (+ optional BYO key) and drive the real agent through Guardian's gate. */
+async function runAgentFromUI(runBtn: HTMLButtonElement) {
+  const inp = document.querySelector("#agent-instruction") as HTMLInputElement | null;
+  const keyInp = document.querySelector("#agent-key") as HTMLInputElement | null;
+  const instruction = (inp?.value || "").trim() || "Help me with my notes.";
+  const apiKey = (keyInp?.value || "").trim() || undefined;
+  const label = runBtn.textContent || "Run";
+  runBtn.disabled = true;
+  runBtn.textContent = "running…";
+  logSim(`▶ real agent: “${trim(instruction, 100)}”`, "warn");
+  try {
+    const res = await runRealAgent(instruction, { exec: execViaGuardian, log: logSim, apiKey });
+    if (res.needsKey) {
+      const d = document.querySelector(".real-key") as HTMLDetailsElement | null;
+      if (d) d.open = true; // reveal the BYO-key field when the server has no key / no proxy
+    }
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = label;
+  }
 }
 
 function trim(s: string, n: number) { return s.length > n ? s.slice(0, n) + "…" : s; }

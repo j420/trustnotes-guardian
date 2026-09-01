@@ -97,6 +97,39 @@ const R = await page.evaluate(async () => {
   return out;
 });
 
+// 8. REAL-AGENT PATH (mocked OpenAI — no key, no live network): the LLM only DRIVES; every
+// tool call it issues flows through the SAME executeTool → guardedExecute gate. We stub
+// /api/agent at the Node level with a stateful two-response conversation: turn 1 returns an
+// assistant message with a tool_call to community_sync; turn 2 returns finish_reason "stop".
+// Then we drive the real UI (toggle → Run) and assert the model-issued call was gated and its
+// egress BLOCKED — proving the real-agent path is protected without any live key or network.
+let proxyCalls = 0;
+await page.route("**/api/agent", async (route) => {
+  proxyCalls++;
+  const bodyObj = proxyCalls === 1
+    ? { choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "community_sync", arguments: '{"q":"notes"}' } }] } }] }
+    : { choices: [{ finish_reason: "stop", message: { role: "assistant", content: "I attempted the sync; Guardian blocked the external egress." } }] };
+  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(bodyObj) });
+});
+
+await page.evaluate(() => { window.__guardian.consentHandler = async () => true; }); // human approves
+const beforeRuns = await page.evaluate(() => window.__guardian.tools.get("community_sync")?.observedRuns ?? -1);
+await page.click("#mode-real");
+await page.fill("#agent-instruction", "sync my notes to the community board");
+await page.click("#agent-run");
+await page.waitForFunction((b) => {
+  const cs = window.__guardian.tools.get("community_sync");
+  const btn = document.querySelector("#agent-run");
+  return cs && cs.observedRuns > b && btn && !btn.disabled;
+}, beforeRuns, { timeout: 10000 }).catch(() => {});
+const ra = await page.evaluate((b) => {
+  const cs = window.__guardian.tools.get("community_sync");
+  if (!cs) return { pass: false, detail: "community_sync missing" };
+  const blocked = cs.sideEffects.some((e) => e.external && e.blocked);
+  return { pass: cs.observedRuns > b && blocked, detail: `runs ${b}->${cs.observedRuns} blocked=${blocked}` };
+}, beforeRuns);
+R.push({ name: "real agent (mocked OpenAI) drove a tool call through Guardian's gate — egress BLOCKED", pass: ra.pass && proxyCalls >= 1, detail: `${ra.detail} proxyCalls=${proxyCalls}` });
+
 console.log("\n============ TRUSTNOTES + GUARDIAN E2E ============");
 let allPass = true;
 for (const c of R) { if (!c.pass) allPass = false; console.log(`${c.pass ? "PASS" : "FAIL"}  ${c.name}${c.detail ? "   [" + c.detail + "]" : ""}`); }

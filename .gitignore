@@ -4,3 +4,7 @@ dist/
 .DS_Store
 .vercel
 dist-spike/
+# Local env / secrets — never commit a real key. .env.example (placeholder only) stays tracked.
+.env
+.env.local
+.env.*.local

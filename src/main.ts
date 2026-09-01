@@ -16,7 +16,7 @@ async function boot() {
   const mc: any = (document as any).modelContext ?? (navigator as any).modelContext;
   if (!mc) {
     console.error("[Guardian] no WebMCP modelContext available (neither native nor polyfill).");
-    mountUI();
+    safeMountUI();
     return;
   }
   try {
@@ -29,7 +29,16 @@ async function boot() {
   } catch (e) {
     console.error("[Guardian] TrustNotes tool registration failed.", e);
   }
-  mountUI();
+  safeMountUI();
+}
+
+/** mountUI wires the toggle/agent controls; a slip there must never white-screen the app. */
+function safeMountUI() {
+  try {
+    mountUI();
+  } catch (e) {
+    console.error("[Guardian] UI mount failed — core boot succeeded.", e);
+  }
 }
 
 void boot();

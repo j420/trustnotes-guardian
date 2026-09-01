@@ -60,9 +60,18 @@ VO: “Even our own honest `search_notes` trips a static B2 on its `query` param
 it *consistent* after witnessing it run read‑only. That's the whole point: a static flag is a fact, not a
 verdict. Guardian judges behavior.”
 
-**2:20–2:40 — (Optional) real agent + close**
+**2:20–2:45 — Real OpenAI agent, gated live**
+[ACTION] In the Agent panel, click the **Real AI agent (OpenAI)** toggle. Type “sync my notes to the
+community board” and click **Run**. (Load the community widget first so `community_sync` exists.) The sim
+log shows the model choosing `community_sync`; the consent modal / DIVERGENCE box appears; Guardian blocks
+the egress. Point once at the on‑screen note “every tool call still goes through Guardian's gate.”
+VO: “Now a *real* OpenAI model drives the same app. It reads the page's tools and decides to call the
+community sync — and Guardian gates it exactly the same way. The model only drives; the security decision
+stays deterministic, with no LLM in the loop. That's the whole design.”
 [ACTION] *(Optional, strongest proof)* 10–15 s clip of a real WebMCP agent in Chrome (flag on) or the
 ChatGPT in‑app browser calling `guardian_audit_page`, captioned “Real WebMCP agent, Chrome <version>.”
+
+**2:45–3:00 — Close**
 [ACTION] Show the one‑line integration + the repo/live URL.
 VO: “Guardian is a drop‑in: one import protects any WebMCP page. It watches what tools *do*, not what
 they say — the trust layer WebMCP doesn't have yet. Open source, live now.”
@@ -70,8 +79,11 @@ they say — the trust layer WebMCP doesn't have yet. Open source, live now.”
 ---
 
 ### Recording tips
-- The **Agent Simulator** is labeled on‑screen “scripted calls, not a live LLM” — say that once so it's
-  never mistaken for a live model. If you can get one real‑agent clip (beat 2:20), it's the single
-  strongest credibility booster.
+- The **scripted** sub‑panel is labeled on‑screen “scripted calls, not a live LLM” — say that once so
+  it's never mistaken for a live model. The **Real AI agent (OpenAI)** toggle (beat 2:20) is the single
+  strongest credibility booster; run it against a Vercel deploy with `OPENAI_API_KEY` set (or paste a BYO
+  key). If the real call ever misbehaves on camera, the ChatGPT in‑app‑browser clip is the fallback proof.
+- Total runtime is ~3:00 with the real‑agent beat; to stay under 2:40, keep 2:20–2:45 to a single Run and
+  cut the optional Chrome/ChatGPT clip.
 - Do a dry run once; the timeline + cards animate as you click, which reads great on camera.
 - Keep the browser at ~1200px wide so both panels are visible.
