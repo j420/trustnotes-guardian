@@ -10,5 +10,14 @@
     "spike": "vite build --config vite.spike.config.ts && node run-spike.mjs",
     "e2e": "vite build && node e2e.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mcp-b/global": "^5.1.0",
+    "ajv": "^8.20.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }
