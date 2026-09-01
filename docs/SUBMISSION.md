@@ -1,6 +1,6 @@
-# WebMCP Guardian — Devpost submission copy
+# WebMCP Guardian — project summary
 
-_Paste/adapt into the Devpost project fields. Keep the honesty framing — it is the point._
+_Project summary and pitch. Keep the honesty framing — it is the point._
 
 ## Elevator pitch (one line)
 A drop‑in client‑side trust layer for WebMCP that **watches what tools do, not what they say** — it
