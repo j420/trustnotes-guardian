@@ -45,17 +45,22 @@ function tokenize(text: string): string[] { return text.toLowerCase().split(/[^\
 /** Word tokens keeping underscore (so `id_rsa` stays whole) — for J5 output scanning. */
 function tokWords(text: string): string[] { return text.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean); }
 function noisyOr(a: number, b: number): number { return 1 - (1 - a) * (1 - b); }
-/** True if `want` appears in order in `tokens`, each within maxGap of the previous. */
-function orderedMatch(tokens: string[], want: readonly string[], maxGap: number): number {
-  let from = 0;
+/**
+ * If `want` appears in order in `tokens` (each token within maxGap of the
+ * previous), return the span {start, end} = index of the FIRST and LAST matched
+ * token; else null. J5's reader-action gate depends on the true start.
+ */
+function orderedMatch(tokens: string[], want: readonly string[], maxGap: number): { start: number; end: number } | null {
+  let from = 0, start = -1;
   for (let ti = 0; ti < want.length; ti++) {
     let found = -1;
     const limit = ti === 0 ? tokens.length : Math.min(tokens.length, from + maxGap + 1);
     for (let i = from; i < limit; i++) if (tokens[i] === want[ti]) { found = i; break; }
-    if (found === -1) return -1;
+    if (found === -1) return null;
+    if (ti === 0) start = found;
     from = found + 1;
   }
-  return from - 1; // index just past the last matched token
+  return { start, end: from - 1 };
 }
 /** Schema property helper. */
 function props(tool: WebMcpTool): Record<string, any> {
@@ -82,7 +87,7 @@ function detectInvisible(text: string): { codepoints: string[]; classes: string[
 // ── A1: injection phrases ───────────────────────────────────────────────────
 function detectInjection(desc: string): string[] {
   const tokens = tokenize(desc), hits: string[] = [];
-  for (const spec of INJECTION_PHRASES) if (orderedMatch(tokens, spec.tokens, spec.max_gap) >= 0) hits.push(spec.label);
+  for (const spec of INJECTION_PHRASES) if (orderedMatch(tokens, spec.tokens, spec.max_gap)) hits.push(spec.label);
   const lc = desc.toLowerCase();
   for (const t of LLM_SPECIAL_TOKENS) if (lc.includes(t.toLowerCase())) hits.push(`LLM special token — ${t}`);
   return hits;
@@ -113,47 +118,68 @@ function detectPreferenceManipulation(desc: string): { label: string; hits: stri
 }
 
 // ── A2: excessive scope claims ──────────────────────────────────────────────
+// Sentinel A2 suppressors ported: (1) self-bounding (BOUNDING_TOKENS), and (2)
+// a read-verb-led claim with NO privilege-escalation signal is an honest read
+// description ("read all your notes") — isReadOnlyClaimNoPrivilegeEscalation.
+const A2_READ_VERBS = new Set(["read", "reads", "reading", "view", "views", "list", "lists", "get", "gets", "fetch", "fetches", "search", "browse", "retrieve", "return", "show"]);
+const A2_ESCALATION = new Set(["write", "writes", "delete", "deletes", "modify", "modifies", "create", "update", "insert", "admin", "administrator", "root", "superuser", "god", "unrestricted", "unlimited", "unfettered", "full", "complete", "execute", "overwrite", "drop", "erase"]);
 function detectScope(desc: string): string[] | null {
   const tokens = tokenize(desc);
   if (BOUNDING_TOKENS.some((b) => tokens.includes(b))) return null; // self-bounded → honest
+  // read-led with no escalation signal → honest read description, not an over-claim
+  if (tokens.some((t) => A2_READ_VERBS.has(t)) && !tokens.some((t) => A2_ESCALATION.has(t))) return null;
   const hits: string[] = [];
   for (const spec of CLAIM_SPECS) {
     const mods = new Set(spec.modifier_tokens), nouns = new Set(spec.noun_tokens);
     const mpos: number[] = [], npos: number[] = [];
     tokens.forEach((t, i) => { if (mods.has(t)) mpos.push(i); if (nouns.has(t)) npos.push(i); });
-    if (mpos.some((m) => npos.some((n) => n > m && n - m <= spec.max_gap))) hits.push(spec.label);
+    // max_gap counts tokens BETWEEN modifier and noun, so n-m may be up to max_gap+1 (matches Sentinel).
+    if (mpos.some((m) => npos.some((n) => n > m && n - m <= spec.max_gap + 1))) hits.push(spec.label);
   }
   return hits.length ? hits : null;
 }
 
 // ── A8: description-capability mismatch (static twin of E5) ──────────────────
+const A8_STRONG_DESTRUCTIVE = new Set(["delete", "remove", "drop", "overwrite", "truncate", "destroy", "erase", "wipe", "purge"]);
 function detectMismatch(tool: WebMcpTool): { claim: string; conflicts: string[] } | null {
   const desc = tool.description || "";
   const tokens = tokenize(desc);
   const declared = tool.annotations?.readOnlyHint === true;
   let claim = declared ? "annotations.readOnlyHint: true" : "";
-  if (!claim) for (const c of READ_ONLY_CLAIMS) if (orderedMatch(tokens, c.tokens, c.max_gap) >= 0) { claim = c.label; break; }
+  if (!claim) for (const c of READ_ONLY_CLAIMS) if (orderedMatch(tokens, c.tokens, c.max_gap)) { claim = c.label; break; }
   if (!claim) return null;
   const conflicts: string[] = [];
   for (const [p, spec] of Object.entries(props(tool))) {
-    for (const t of nameTokens(p)) {
-      if (WRITE_PARAM_TOKENS.has(t)) conflicts.push(`write-capable parameter '${p}'`);
-      else if (NETWORK_PARAM_TOKENS.has(t)) conflicts.push(`network-send parameter '${p}'`);
-    }
-    const dd = DANGEROUS_DEFAULTS[p.toLowerCase()];
+    const lp = p.toLowerCase();
+    const toks = nameTokens(p);
+    // Only a WHOLE-name write token or a STRONG destructive verb token counts —
+    // avoids sub-word FPs like post_id→post, run_id→run, last_update→update.
+    if (WRITE_PARAM_TOKENS.has(lp) || toks.some((t) => A8_STRONG_DESTRUCTIVE.has(t))) conflicts.push(`write-capable parameter '${p}'`);
+    else if (NETWORK_PARAM_TOKENS.has(lp) || lp.endsWith("_url") || lp.endsWith("webhook")) conflicts.push(`network-send parameter '${p}'`);
+    const dd = DANGEROUS_DEFAULTS[lp];
     if (dd && spec && String((spec as any).default) === "true") conflicts.push(`dangerous default ${dd.label}`);
   }
   return conflicts.length ? { claim, conflicts: [...new Set(conflicts)] } : null;
 }
 
 // ── B2: dangerous parameter types ───────────────────────────────────────────
+/** A value set closed to a finite author-chosen list (enum/const), incl. via allOf/anyOf/oneOf/$ref. */
+function isClosedValueSet(spec: any): boolean {
+  if (!spec || typeof spec !== "object") return false;
+  if (Object.keys(VALUE_CLOSING_KEYWORDS).some((k) => spec[k] !== undefined)) return true; // enum/const
+  if (spec.$ref !== undefined) return true; // local ref to a closed def — treated as closed (conservative)
+  for (const key of ["allOf", "anyOf", "oneOf"]) {
+    const branches = spec[key];
+    if (Array.isArray(branches) && branches.length && branches.every((b: any) => isClosedValueSet(b))) return true;
+  }
+  return false;
+}
 function detectDangerousParams(tool: WebMcpTool): string[] | null {
   const hits: string[] = [];
   for (const [p, spec] of Object.entries(props(tool))) {
     const d = DANGEROUS_PARAM_NAMES[p.toLowerCase()];
     if (!d) continue;
-    const closed = spec && typeof spec === "object" && Object.keys(VALUE_CLOSING_KEYWORDS).some((k) => (spec as any)[k] !== undefined);
-    if (!closed) hits.push(`'${p}' → ${d.sink} (${d.rationale})`);
+    if (!isClosedValueSet(spec)) hits.push(`'${p}' → ${d.sink} (${d.rationale})`);
   }
   return hits.length ? hits : null;
 }
@@ -176,21 +202,33 @@ function detectDangerousDefaults(tool: WebMcpTool): string[] | null {
 }
 
 // ── G5: capability escalation via prior approval ────────────────────────────
+const G5_NOUN_WINDOW = 8; // Sentinel requires a permission noun within ±8 tokens of the phrase span
 function detectPriorApproval(desc: string): { hits: string[] } | null {
   const tokens = tokenize(desc);
-  if (!tokens.some((t) => t in PERMISSION_NOUNS)) return null; // adjacency suppression (permission noun required)
+  const nounPos = tokens.map((t, i) => (t in PERMISSION_NOUNS ? i : -1)).filter((i) => i >= 0);
+  if (!nounPos.length) return null;
   let agg = 0; const hits: string[] = [];
-  for (const spec of PRIOR_APPROVAL_PHRASES) if (orderedMatch(tokens, spec.tokens, spec.max_gap) >= 0) { agg = noisyOr(agg, spec.weight); hits.push(spec.label); }
+  for (const spec of PRIOR_APPROVAL_PHRASES) {
+    const m = orderedMatch(tokens, spec.tokens, spec.max_gap);
+    if (!m) continue;
+    // adjacency suppression: a permission noun must sit within ±8 tokens of THIS phrase span
+    const near = nounPos.some((n) => n >= m.start - G5_NOUN_WINDOW && n <= m.end + G5_NOUN_WINDOW);
+    if (near) { agg = noisyOr(agg, spec.weight); hits.push(spec.label); }
+  }
   return agg >= G5_CONFIDENCE_FLOOR ? { hits } : null;
 }
 
 // ── J3: full schema poisoning (shape-based) ─────────────────────────────────
 function slotAnomaly(kind: "enum" | "const" | "title" | "default", value: string): { weight: number; why: string } | null {
   const words = value.trim().split(/\s+/).filter(Boolean);
-  const markers = tokenize(value).filter((t) => t in SLOT_ADDRESSEE_MARKERS);
   if (words.length > J3_SHAPE.prose_word_threshold) return { weight: J3_SHAPE.field_weight[kind], why: `prose (${words.length} words) in ${kind} slot` };
-  if (markers.length) return { weight: J3_SHAPE.field_weight[kind], why: `${SLOT_ADDRESSEE_MARKERS[markers[0]]} (${kind})` };
-  return null;
+  // Addressee markers are de-rated (Sentinel: max(0.35, w-0.15)) so a single benign
+  // "Your API token" title clears the floor; a genuine multi-marker directive still fires.
+  const markers = [...new Set(tokenize(value).filter((t) => t in SLOT_ADDRESSEE_MARKERS))];
+  if (!markers.length) return null;
+  const deRated = Math.max(0.35, J3_SHAPE.field_weight[kind] - 0.15);
+  const weight = markers.reduce((acc) => noisyOr(acc, deRated), 0);
+  return { weight, why: `${markers.map((m) => SLOT_ADDRESSEE_MARKERS[m]).join(", ")} (${kind})` };
 }
 function detectSchemaPoisoning(tool: WebMcpTool): string[] | null {
   let agg = 0; const hits: string[] = [];
@@ -218,8 +256,9 @@ function detectSchemaPoisoning(tool: WebMcpTool): string[] | null {
 function detectTrustAssertion(desc: string): { authority: string; consequence: string } | null {
   const tokens = tokenize(desc);
   for (const claim of AUTHORITY_CLAIMS) {
-    const end = orderedMatch(tokens, claim.tokens, claim.max_gap);
-    if (end < 0) continue;
+    const m = orderedMatch(tokens, claim.tokens, claim.max_gap);
+    if (!m) continue;
+    const end = m.end;
     const lo = Math.max(0, end - G2_COMPOSITION.consequence_binding_tokens);
     const hi = Math.min(tokens.length - 1, end + G2_COMPOSITION.consequence_binding_tokens);
     for (let i = lo; i <= hi; i++) {
@@ -287,8 +326,13 @@ export function staticObservations(tool: WebMcpTool): StaticObservation[] {
   const jpoison = detectSchemaPoisoning(tool);
   if (jpoison) obs.push({ id: "SCHEMA-POISON", sentinelRule: "J3", label: `Injection/prose in a non-description schema slot (enum/const/title/default)`, evidence: jpoison.join("; ") });
 
-  // I2 — destructive schema whose destructiveHint is absent/false (companion of I1)
-  if (isDestructiveShape(tool) && tool.annotations?.destructiveHint !== true) {
+  // I2 — destructive schema whose destructiveHint is absent/false (companion of I1).
+  // Sentinel I2 only applies when an annotations block is PRESENT (to be "missing" the
+  // hint from) — a tool with no annotations at all is out of I2's reach, so an ordinary
+  // WebMCP action tool ("remove_item", "drop_pin") with no annotations does NOT fire.
+  const anns = tool.annotations;
+  const hasAnnotations = anns != null && typeof anns === "object" && Object.keys(anns).length > 0;
+  if (hasAnnotations && isDestructiveShape(tool) && anns.destructiveHint !== true) {
     obs.push({ id: "MISSING-DESTRUCTIVE-HINT", sentinelRule: "I2", label: `Destructive-looking tool with no destructiveHint — AI clients may auto-approve it`, evidence: destructiveWhy(tool) });
   }
 
@@ -354,16 +398,17 @@ export function outputObservations(text: string): StaticObservation[] {
   if (!text) return [];
   const tokens = tokWords(text);
   // reader-action co-signals present anywhere in the output?
-  const hasFrame = J5_REMEDIATION_FRAMES.some((f) => orderedMatch(tokens, f, 0) >= 0);
+  const hasFrame = J5_REMEDIATION_FRAMES.some((f) => orderedMatch(tokens, f, 0) !== null);
   const credPathToken = tokens.some((t, i) => J5_CREDENTIAL_PATH_TOKENS[t] && !(J5_PRIVATE_KEY_FILENAME_TOKENS[t] && tokens[i + 1] === J5_PUBLIC_KEY_TOKEN));
   const out: StaticObservation[] = [];
   for (const [, d] of Object.entries(J5_DIRECTIVES)) {
-    const end = orderedMatch(tokens, d.tokens, d.max_gap);
-    if (end < 0) continue;
+    const m = orderedMatch(tokens, d.tokens, d.max_gap);
+    if (!m) continue;
     let fire = d.gate === "match";
     if (!fire) {
-      const start = end - d.tokens.length + 1;
-      const addressOutside = tokens.some((t, i) => J5_ADDRESS_TOKENS[t] && (i < start || i > end));
+      // an address token (you/please) counts only OUTSIDE the matched phrase span
+      // [m.start, m.end] — otherwise "please run" would self-satisfy the gate.
+      const addressOutside = tokens.some((t, i) => J5_ADDRESS_TOKENS[t] && (i < m.start || i > m.end));
       fire = hasFrame || credPathToken || addressOutside;
     }
     if (fire) out.push({ id: `OUTPUT-${d.kind.toUpperCase()}`, sentinelRule: "J5", label: `Witnessed tool OUTPUT contains a ${d.kind} directive addressed to the agent`, evidence: `${d.label} — in returned text: "${text.slice(0, 80)}${text.length > 80 ? "…" : ""}"` });

@@ -121,10 +121,13 @@ export function decodeRuns(text: string): DecodedRun[] {
     if (classifyBenignShape(text, m.index!, m[0])) continue;
     const d = tryB64(m[0]); if (d) runs.push({ scheme: "base64", raw: m[0], start: m.index!, decoded: d });
   }
-  // hex: contiguous hex, length ≥ 16 and even
-  for (const m of text.matchAll(/[0-9a-fA-F]{16,}/g)) {
-    if (m[0].length % 2 !== 0 || classifyBenignShape(text, m.index!, m[0])) continue;
-    const d = tryHex(m[0]); if (d) runs.push({ scheme: "hex", raw: m[0], start: m.index!, decoded: d });
+  // hex: 0x-PREFIXED contiguous hex, length ≥ 16 and even. Sentinel's A9 only scans
+  // 0x-prefixed hex strings (scanHexString), so we match that — a bare hex run is not
+  // an "encoded instruction" candidate, and this also avoids double-decoding it as base64.
+  for (const m of text.matchAll(/0x([0-9a-fA-F]{16,})/g)) {
+    const hexStr = m[1];
+    if (hexStr.length % 2 !== 0 || classifyBenignShape(text, m.index! + 2, hexStr)) continue;
+    const d = tryHex(hexStr); if (d) runs.push({ scheme: "hex", raw: m[0], start: m.index!, decoded: d });
   }
   return runs;
 }

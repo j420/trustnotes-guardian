@@ -39,15 +39,16 @@ instrumentation that attributes side effects to the currently‑executing tool. 
 detection data ported from our MCP Sentinel 183‑rule security registry — 20 rules re‑implemented for the
 browser** across three surfaces: DECLARED metadata (A1/A2/A6/A7/A8/A9/B2/B6/B7/G2/G5/I1/I2/J3/J6), the
 whole tool set (F1 lethal trifecta, I16 consent fatigue), and WITNESSED behavior (E5 declared‑vs‑observed,
-J5 tool‑output poisoning, G6 mid‑session). Several catalogues are *verbatim*; the UTS‑39 confusables (A6),
+J5 tool‑output poisoning, G6 mid‑session). Several catalogues are *verbatim*; the UTS‑39 confusables (A6), the G2 authority claims and J5 directive vocab,
 the A9 decoder, and the capability graph (F1/I16) are honestly‑labeled curated subsets. It's not a keyword
 scan — Guardian ports Sentinel's *matching strategy* (mixed‑script, class‑gated, ordered‑token,
 operator+referent composition, schema‑shape, capability tagging) — and `npm run validate` proves it
-against Sentinel's own red‑team fixtures: **52/52**, including the hard negatives (the "always returns the
+against Sentinel's own red‑team fixtures: **61/61** (incl. 8 false‑positive regression guards), including the hard negatives (the "always returns the
 first row" data‑noun trap, the "alwaysOnCache" substring trap, an honest deprecation notice, a
 certification that *requires* confirmation, a legit percent‑encoding doc, an `id_rsa.pub` rotation note).
 The strongest of the 20 is **J5**: Guardian is uniquely positioned to WITNESS a tool's returned text, so
-it catches an "error" that tells the agent to read `~/.ssh/id_rsa` — something no static scanner can see.
+it catches an "error" that tells the agent to read `~/.ssh/id_rsa` — something no scanner limited to a
+tool's *declared metadata* can see (the agent only reads name/description/schema until the tool runs).
 The deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
 Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (17/17).
 
@@ -56,7 +57,7 @@ Everything is proven in real headless Chromium: a mechanics spike (12/12) and a 
   and gating `registerTool`/`executeTool`) **and** *registers* its own agent‑callable tools; TrustNotes
   registers four real tools an agent drives.
 - **Execution:** a complete, coherent product — a usable notes app + a live inspector + consent modal +
-  probe + agent simulator, deployed and demoable, with automated proofs (spike 12/12, e2e 15/15).
+  probe + agent simulator, deployed and demoable, with automated proofs (spike 12/12, e2e 17/17, validate 61/61).
 - **Potential Impact:** a concrete audience (developers shipping WebMCP tools who also load third‑party
   scripts) and a documented, current threat (arXiv 2606.06387) that WebMCP has no built‑in defense for —
   the safety layer for the human+agent web as WebMCP rolls out via OpenAI and Chrome.

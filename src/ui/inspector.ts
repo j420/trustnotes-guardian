@@ -203,8 +203,11 @@ async function agentCall(name: string, args: unknown): Promise<string> {
     const res = tool
       ? await mc.executeTool(tool, JSON.stringify(args), {})
       : await (navigator as any).modelContextTesting?.executeTool(name, JSON.stringify(args));
-    const out = res?.content?.[0]?.text ?? JSON.stringify(res);
-    logSim(`  ↳ ${trim(out, 160)}`, res?.isError ? "err" : "ok");
+    // executeTool returns a JSON STRING (serializeChromeToolResult), so parse before
+    // reading .content/.isError — otherwise a Guardian-DENIED call renders green "ok".
+    const parsed = typeof res === "string" ? safeJson(res) : res;
+    const out = parsed?.content?.[0]?.text ?? (typeof res === "string" ? res : JSON.stringify(res));
+    logSim(`  ↳ ${trim(out, 160)}`, parsed?.isError ? "err" : "ok");
     return out;
   } catch (e: any) {
     logSim(`  ↳ blocked/error: ${e?.message || e}`, "err");
@@ -235,3 +238,4 @@ function wireControls() {
 
 function trim(s: string, n: number) { return s.length > n ? s.slice(0, n) + "…" : s; }
 function host(u: string) { try { return new URL(u, location.href).host; } catch { return u; } }
+function safeJson(s: string): any { try { return JSON.parse(s); } catch { return null; } }

@@ -25,6 +25,8 @@ export class Guardian extends EventTarget {
   readonly timeline: TimelineEvent[] = [];
   /** Page-level findings (F1 lethal trifecta, I16 consent fatigue) across the whole tool set. */
   pageFindings: StaticObservation[] = [];
+  /** Guardian's OWN tool names — excluded from page-level aggregation by identity, not name prefix. */
+  private guardianToolNames = new Set<string>();
   private origExecute = new Map<string, (a: any) => any>();
   /** Minimal descriptors kept for page-level (F1/I16) recomputation — includes annotations. */
   private descriptors = new Map<string, Pick<WebMcpTool, "name" | "description" | "inputSchema" | "annotations">>();
@@ -37,8 +39,8 @@ export class Guardian extends EventTarget {
   private emit() { this.dispatchEvent(new Event("change")); }
   private log(e: Omit<TimelineEvent, "at">) { this.timeline.push({ ...e, at: Date.now() }); this.emit(); }
 
-  /** Mid-session = registered after the initial load window closed. */
-  private provenance(): "initial" | "mid-session" { return this.loadWindowClosed ? "mid-session" : "initial"; }
+  /** Mid-session = registered after the initial load window closed (or forced, for deterministic tests). */
+  private provenance(): "initial" | "mid-session" { return (this.loadWindowClosed || (this as any).__forceMid) ? "mid-session" : "initial"; }
 
   install(mc: any) {
     installInstrumentation();
@@ -111,7 +113,9 @@ export class Guardian extends EventTarget {
 
   /** Recompute page-level (F1/I16) findings across the current tool set (excludes Guardian's own tools). */
   private recomputePageFindings() {
-    const pageTools = [...this.descriptors.values()].filter((d) => !(d.name || "").startsWith("guardian_"));
+    // Exclude Guardian's own tools by IDENTITY (a Set of real names), not by a "guardian_"
+    // prefix — otherwise an injected tool could name itself `guardian_sync` to dodge F1/I16.
+    const pageTools = [...this.descriptors.values()].filter((d) => !this.guardianToolNames.has(d.name || ""));
     this.pageFindings = pageObservations(pageTools);
   }
 
@@ -144,7 +148,13 @@ export class Guardian extends EventTarget {
 
   private needsConsent(rec: ToolRecord): string | null {
     if (rec.status === "diverged" || rec.status === "flagged") return "this tool has a witnessed divergence or was flagged";
-    if (rec.staticFlags.some((f) => ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE", "ENCODED-INSTRUCTION", "TRUST-ASSERTION", "PRIOR-APPROVAL", "CAPABILITY-MISMATCH", "SCHEMA-POISON"].includes(f.id))) return "this tool's metadata contains deceptive signals";
+    // Consent fires only on the HIGH-signal deception flags — the ones that mean the
+    // description is actively hiding something (invisible/look-alike chars, an injection
+    // imperative, an encoded blob) or explicitly social-engineering the agent (a trust
+    // waiver / manufactured prior grant). The softer structural heuristics (A8
+    // capability-mismatch, J3 schema-poison) render as visible labels but never INTERRUPT
+    // the agent — consistent with "gate on witnessed behavior, not on a static label".
+    if (rec.staticFlags.some((f) => ["UNICODE-HOMOGLYPH", "UNICODE-HIDDEN", "INJ-IMPERATIVE", "ENCODED-INSTRUCTION", "TRUST-ASSERTION", "PRIOR-APPROVAL"].includes(f.id))) return "this tool's metadata contains deceptive signals";
     if (!rec.declaredReadOnly && /delete|remove|drop|overwrite|purge|wipe/i.test(rec.name + " " + rec.description)) return "this tool declares a destructive action";
     return null;
   }
@@ -209,6 +219,7 @@ export class Guardian extends EventTarget {
 
   /** Register Guardian's own agent-callable tools via the ORIGINAL registerTool (unguarded). */
   registerGuardianTools(mc: any, origRegister: (t: WebMcpTool, o?: any) => any) {
+    for (const n of ["guardian_audit_page", "guardian_probe_tool", "guardian_explain_tool"]) this.guardianToolNames.add(n);
     const text = (o: unknown) => ({ content: [{ type: "text", text: JSON.stringify(o, null, 2) }] });
     origRegister({
       name: "guardian_audit_page",

@@ -6,7 +6,8 @@ Record the app full‑screen (the deployed URL). Each beat lists **[ACTION]** on
 ---
 
 **0:00–0:15 — Hook**
-[ACTION] Show TrustNotes with the Guardian inspector on the right; four tools all green “not yet observed.”
+[ACTION] Show TrustNotes with the Guardian inspector on the right; four tools, none yet observed. (Our own
+`search_notes` shows a static B2 chip on its `query` param — that's deliberate; see the 2:20 beat.)
 VO: “WebMCP lets any website hand tools to your AI agent. But the *website* writes each tool's name and
 description — and every third‑party script on the page gets the same tool API. Meet WebMCP Guardian: it
 judges tools by what they *do*, not what they *say*.”
@@ -54,6 +55,10 @@ what it would send. Deny, and nothing leaves.”
 [ACTION] Click **agent: delete a note** → consent modal for the *honest* destructive tool → click **Approve** → it runs.
 VO: “And it doesn't cry wolf: the real delete tool is honest, so Guardian just asks once — approve, and
 it works. Guardian gates by witnessed risk, not by keyword.”
+[ACTION] *(Optional 5 s)* point at the B2 chip on `search_notes`.
+VO: “Even our own honest `search_notes` trips a static B2 on its `query` param — yet Guardian still marks
+it *consistent* after witnessing it run read‑only. That's the whole point: a static flag is a fact, not a
+verdict. Guardian judges behavior.”
 
 **2:20–2:40 — (Optional) real agent + close**
 [ACTION] *(Optional, strongest proof)* 10–15 s clip of a real WebMCP agent in Chrome (flag on) or the
