@@ -2,9 +2,32 @@
 import { guardian } from "../guardian/index.js";
 import type { ToolRecord } from "../guardian/types.js";
 import { getNotes, onNotesChange } from "../app/trustnotes.js";
+import { ruleMeta, SENTINEL_RULES } from "../guardian/data/sentinel-registry.js";
 
 const $ = (sel: string, root: ParentNode = document) => root.querySelector(sel) as HTMLElement;
 const el = (tag: string, cls?: string, txt?: string) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+/** A small "Sentinel A7 · critical · MCP01 · AML.T0054" ribbon with an expandable remediation. */
+function ruleRibbon(ruleId: string): HTMLElement | null {
+  const m = ruleMeta(ruleId);
+  if (!m) return null;
+  const box = el("div", "rule-meta");
+  const head = el("div", "rule-meta-head");
+  head.append(
+    el("span", "rule-id", "Sentinel " + m.id),
+    el("span", "sev sev-" + m.severity, m.severity),
+    el("span", "rule-name", m.name),
+  );
+  const tags = el("span", "rule-tags");
+  tags.append(el("span", "tag owasp", m.owasp));
+  if (m.mitre) tags.append(el("span", "tag mitre", m.mitre));
+  head.append(tags);
+  box.append(head);
+  const rem = el("details", "rule-rem");
+  rem.append(el("summary", "", "remediation (from Sentinel)"), el("p", "", m.remediation));
+  box.append(rem);
+  return box;
+}
 
 const STATUS_LABEL: Record<ToolRecord["status"], string> = {
   "not-yet-observed": "not yet observed", consistent: "consistent", diverged: "diverged", flagged: "flagged",
@@ -16,7 +39,28 @@ export function mountUI() {
   guardian.addEventListener("change", renderGuardian);
   guardian.consentHandler = consentModal;
   renderGuardian();
+  renderSentinelPanel();
   wireControls();
+}
+
+// ---------- Powered-by-Sentinel panel (driven by the ported registry) ----------
+function renderSentinelPanel() {
+  const table = document.querySelector("#sentinel-rules") as HTMLTableElement | null;
+  if (!table) return;
+  table.innerHTML = "";
+  const head = el("tr", "sr-head");
+  for (const h of ["Rule", "Sev", "What Guardian ports"]) head.append(el("th", "", h));
+  table.append(head);
+  for (const m of Object.values(SENTINEL_RULES)) {
+    const row = el("tr", "sr-row");
+    const c1 = el("td", "sr-rule");
+    c1.append(el("span", "rule-id", m.id), el("span", "sr-name", m.name));
+    const c2 = el("td", "sr-sev");
+    c2.append(el("span", "sev sev-" + m.severity, m.severity));
+    const c3 = el("td", "sr-use", m.guardianUse);
+    row.append(c1, c2, c3);
+    table.append(row);
+  }
 }
 
 // ---------- TrustNotes ----------
@@ -63,12 +107,16 @@ function toolCard(r: ToolRecord): HTMLElement {
 
   for (const d of r.divergences) {
     const div = el("div", "g-diverge");
-    div.append(el("span", "warn", "⚠ DIVERGENCE"), el("span", "", `declared ${d.declared} — observed ${d.observed} (Sentinel ${d.sentinelRule})`));
+    div.append(el("span", "warn", "⚠ DIVERGENCE"), el("span", "", `declared ${d.declared} — observed ${d.observed}`));
+    const ribbon = ruleRibbon(d.sentinelRule);
+    if (ribbon) div.append(ribbon);
     card.append(div);
   }
   for (const f of r.staticFlags) {
     const flag = el("div", "g-flag");
-    flag.append(el("span", "flag-id", f.id), el("span", "flag-label", f.label), el("code", "flag-ev", f.evidence), el("span", "flag-rule", "Sentinel " + f.sentinelRule));
+    flag.append(el("span", "flag-id", f.id), el("span", "flag-label", f.label), el("code", "flag-ev", f.evidence));
+    const ribbon = ruleRibbon(f.sentinelRule);
+    if (ribbon) flag.append(ribbon);
     card.append(flag);
   }
 
@@ -161,7 +209,7 @@ function wireControls() {
   };
   $("#sim-search").onclick = () => agentCall("search_notes", { query: "trip" });
   $("#sim-audit").onclick = () => agentCall("guardian_audit_page", {});
-  $("#sim-call-widget").onclick = () => agentCall("sync_notеs", { q: "x" }); // homoglyph name
+  $("#sim-call-widget").onclick = () => agentCall("community_sync", { q: "x" }); // the mid-session-injected tool
   $("#sim-delete").onclick = () => agentCall("delete_note", { id: 1 });
 }
 

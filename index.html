@@ -47,6 +47,29 @@
       </div>
       <div id="sim-log" class="sim-log"></div>
     </section>
+
+    <!-- Powered by MCP Sentinel -->
+    <section class="panel sentinel">
+      <h2>🔎 Powered by <a href="https://github.com/j420/mcpsentinal" target="_blank" rel="noopener">MCP Sentinel</a></h2>
+      <p class="muted">
+        Guardian's static observations reuse real detection data <strong>ported from MCP Sentinel</strong>, a
+        183-rule MCP-security registry. Sentinel's engine is server-side (Node + Postgres) and can't run in a
+        browser, so Guardian ports the browser-relevant tables and matching strategy — the invisible-codepoint
+        catalogue and injection-phrase catalogue <em>verbatim</em>, a curated subset of the UTS-39 confusables,
+        and the compositional tool-preference vocabulary — and cites the exact rule behind every finding.
+      </p>
+      <div class="sentinel-badge">
+        <span class="sb-chip">✓ validated against Sentinel's own red-team fixtures</span>
+        <code class="sb-cmd">npm run validate</code>
+        <span class="muted">→ 22/22 (incl. Sentinel's hard negatives)</span>
+      </div>
+      <table id="sentinel-rules" class="sentinel-rules"></table>
+      <p class="muted sentinel-foot">
+        Guardian uses Sentinel's <strong>severity vocabulary</strong> but produces <strong>no risk score</strong> —
+        the verdict comes from witnessed behavior, not a points total. A ported subset means a look-alike outside
+        the curated set is a Guardian miss that Sentinel's full server-side rule would still catch.
+      </p>
+    </section>
   </main>
 
   <footer class="foot">

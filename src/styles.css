@@ -82,4 +82,32 @@ button:hover { border-color: var(--accent); }
 .btn-approve { background: #10331f; border-color: var(--ok); color: #d7ffe9; }
 .btn-deny { background: #3a1414; border-color: var(--danger); color: #ffdada; }
 .foot { color: var(--muted); font-size: 12px; padding: 16px 20px; border-top: 1px solid var(--line); max-width: 1200px; margin: 0 auto; }
-@media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
+
+/* per-finding rule ribbon (real Sentinel metadata) */
+.rule-meta { flex-basis: 100%; width: 100%; margin-top: 6px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.rule-meta-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rule-id { font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--accent); background: #16233f; padding: 1px 6px; border-radius: 4px; }
+.rule-name { font-size: 12px; color: var(--ink); }
+.sev { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.sev-critical { background: #3a1414; color: #ff9a9a; } .sev-high { background: #40260a; color: #ffbf7a; }
+.sev-medium { background: #3a3410; color: #f2e08a; } .sev-low { background: #10331f; color: #9be8bf; }
+.sev-informational { background: #1b2740; color: #9fc0ff; }
+.rule-tags { margin-left: auto; display: flex; gap: 6px; }
+.tag { font-size: 9.5px; padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, monospace; }
+.tag.owasp { background: #17263f; color: #9fc0ff; } .tag.mitre { background: #2a1a33; color: #d6a8ff; }
+.rule-rem { margin-top: 5px; } .rule-rem summary { color: var(--muted); font-size: 11px; cursor: pointer; }
+.rule-rem p { margin: 6px 0 2px; font-size: 11.5px; color: var(--ink); line-height: 1.45; }
+
+/* Powered-by-Sentinel panel */
+.sentinel { grid-column: 1 / -1; }
+.sentinel a { color: var(--accent); }
+.sentinel-badge { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 12px; }
+.sb-chip { font-size: 11px; background: #10331f; color: var(--ok); padding: 3px 9px; border-radius: 10px; }
+.sb-cmd { font-family: ui-monospace, monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--line); padding: 2px 7px; border-radius: 5px; color: var(--ink); }
+.sentinel-rules { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sentinel-rules th { text-align: left; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.sentinel-rules td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sr-rule { white-space: nowrap; } .sr-name { margin-left: 8px; color: var(--ink); }
+.sr-use { color: var(--muted); line-height: 1.45; }
+.sentinel-foot { margin-top: 10px; }
+@media (max-width: 780px) { .grid { grid-template-columns: 1fr; } .rule-tags { margin-left: 0; } }

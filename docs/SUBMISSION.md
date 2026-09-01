@@ -36,9 +36,16 @@ Vite + TypeScript, the `@mcp-b/global` WebMCP polyfill, and `ajv` for validation
 build, no backend. The core is a `registerTool` wrapper that swaps each tool's `execute` for a guarded
 one (proven to intercept every execution path against the real polyfill source), plus global
 instrumentation that attributes side effects to the currently‑executing tool. The static observations
-are derived from our MCP Sentinel 183‑rule security taxonomy (E5 declared‑vs‑observed, A6/A7 unicode,
-A1 injection, J6 preference, B6 schema), re‑implemented for the browser. Everything is proven in real
-headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (15/15).
+reuse **real detection data ported from our MCP Sentinel 183‑rule security registry** — the
+invisible‑codepoint catalogue (A7) and injection‑phrase catalogue (A1) *verbatim*, the compositional
+tool‑preference vocabulary (J6), a curated subset of the UTS‑39 confusables (A6), and the rule metadata
+(name / severity / OWASP / MITRE / remediation) surfaced on every finding in the app. It's not a
+keyword scan: Guardian ports Sentinel's *matching strategy* (mixed‑script for A6, class‑gated for A7,
+ordered‑token for A1, operator+referent composition for J6), and `npm run validate` proves it against
+Sentinel's own red‑team fixtures — **22/22**, including Sentinel's hard negatives (the "always returns
+the first row" data‑noun trap, the "alwaysOnCache" substring trap, an honest deprecation notice). The
+deployed portal has a "Powered by MCP Sentinel" panel and cites the real rule behind each finding.
+Everything is proven in real headless Chromium: a mechanics spike (12/12) and a full‑flow E2E (15/15).
 
 ## How this maps to the judging criteria
 - **WebMCP Leverage:** deep, non‑trivial use — Guardian both *wraps* `document.modelContext` (observing
@@ -60,8 +67,10 @@ as the headline. Attributing an async side effect to the right tool needed a car
 
 ## Honesty (what we did NOT claim)
 "Not yet observed" is never "safe." The Agent Simulator is labeled "scripted calls, not a live LLM"
-(verdicts are computed live). We say "derived from" Sentinel's taxonomy, not "runs 183 rules." We
-demonstrate on the polyfill path and label native‑browser behavior as assumed‑not‑verified.
+(verdicts are computed live). We say data is **ported from** Sentinel and label each table verbatim vs.
+curated‑subset — not "runs 183 rules"; a look‑alike outside the curated confusables is a miss Sentinel's
+full server‑side rule would still catch, and the app says so. We demonstrate on the polyfill path and
+label native‑browser behavior as assumed‑not‑verified.
 
 ## What's next
 Native‑browser verification on the Chrome WebMCP flag; cross‑tool toxic‑flow witnessing (Sentinel E6);

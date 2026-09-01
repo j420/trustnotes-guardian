@@ -51,12 +51,22 @@ Guardian also registers its own agent‑callable tools — `guardian_audit_page`
   identically for a real agent, the simulator, or a malicious script. **Verdicts are computed live,
   never scripted.**
 
-## Powered by the MCP Sentinel taxonomy
+## Powered by the MCP Sentinel taxonomy — concretely
 
-Guardian's static observations are **derived from [MCP Sentinel](https://github.com/j420/mcpsentinal)'s
-183‑rule MCP‑security taxonomy** — a handful of the browser‑relevant checks, re‑implemented in
-client‑side TypeScript (the Sentinel engine is server‑side and doesn't run in a browser). Each finding
-cites the rule it maps to:
+Guardian's static observations reuse **real detection data ported from [MCP Sentinel](https://github.com/j420/mcpsentinal)**,
+a 183‑rule MCP‑security registry. Sentinel's engine is server‑side (Node + Postgres) and can't run in a
+browser, so Guardian ports the browser‑relevant tables and, crucially, Sentinel's *matching strategy* —
+not a naive keyword scan. The ported data lives in [`src/guardian/data/sentinel-*.ts`](src/guardian/data):
+
+| File | Ported from Sentinel | Fidelity |
+|---|---|---|
+| `sentinel-invisible.ts` | `a7-zero-width-injection/data/invisible-codepoints.ts` | **verbatim** catalogue (class‑gated) |
+| `sentinel-phrases.ts` | `a1-prompt-injection-description/data/injection-phrases.ts` | **verbatim** catalogue (ordered‑token match) |
+| `sentinel-preference.ts` | `j6-tool-preference-manipulation/data/preference-composition.ts` | **verbatim** operator/referent vocabulary (compositional) |
+| `sentinel-confusables.ts` | `a6-unicode-homoglyph` UTS‑39 table (~97k tokens) | **curated subset** (mixed‑script gate), honestly labeled |
+| `sentinel-registry.ts` | `packages/database/src/rule-registry.ts` | **verbatim** rule name / severity / OWASP / MITRE / remediation |
+
+Each finding cites the rule it maps to, and the app surfaces the **real Sentinel metadata** for it:
 
 | Observation | Sentinel rule |
 |---|---|
@@ -68,8 +78,16 @@ cites the rule it maps to:
 | Unconstrained input schema | **B6** |
 | Mid‑session injection / attempted overwrite | **G6 / E5** |
 
+**Validated against Sentinel's own red‑team fixtures.** `npm run validate` runs Guardian's ported
+detectors against the *actual* true‑positive / true‑negative strings from Sentinel's A6/A7/A1/J6 fixture
+suite — **22/22**, including Sentinel's *hard negatives* that a substring matcher false‑positives on: the
+`always returns the first row` data‑noun trap, the `alwaysOnCache` substring trap, an honest deprecation
+notice (`supersedes … tool … see the migration guide`), and bidi marks in genuine RTL prose.
+
 Guardian uses the *same severity vocabulary* as Sentinel, but it does **not** produce a risk score — the
-verdict comes from **witnessed behavior**, not a points total.
+verdict comes from **witnessed behavior**, not a points total. A curated subset means a look‑alike outside
+the ported set is a Guardian miss that Sentinel's full server‑side rule would still catch (stated in the
+app's "Powered by MCP Sentinel" panel).
 
 ## Run it
 
@@ -80,6 +98,7 @@ npm run build      # static production build → dist/
 npm run typecheck  # tsc --noEmit
 npm run spike      # Phase-0 mechanics proof (headless Chromium) — 12/12
 npm run e2e        # full demo flow proof (headless Chromium) — 15/15
+npm run validate   # ported detectors vs Sentinel's own red-team fixtures — 22/22
 ```
 
 Runs in any modern browser via the **`@mcp-b/global`** WebMCP polyfill; also runs under native WebMCP
