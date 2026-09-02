@@ -153,6 +153,41 @@ import { guardian } from "trustnotes-guardian/guardian";
 guardian.install(document.modelContext); // BEFORE you register your own tools
 ```
 
+## Audit any WebMCP URL (Guardian as a third-party auditor)
+
+Guardian isn't only the seatbelt on *its own* page — point it at **any** WebMCP URL and read that
+page's tools against the ported Sentinel detectors. Against a live third party this does **read-only
+enumeration only** (`document.modelContext.getTools()` + declared-metadata detectors + page-level F1/I16)
+and **never invokes a tool** — that's Guardian's own **T1 ethic** (you can't tell from a schema whether
+calling a tool has side effects, so you don't).
+
+```bash
+npm run build:audit                       # bundle the analyzer → dist-audit/guardian-audit.iife.js
+npm run audit -- https://some-webmcp-site.example         # audit a real URL
+npm run audit -- https://site.example --json report.json --shot page.png
+# Chromium: `npx playwright install chromium` once, or set GUARDIAN_CHROMIUM=/path/to/chrome
+```
+
+Example run against a real WebMCP page whose tools include a mid-session-injected poisoned tool:
+
+```
+🛡️  Guardian WebMCP audit  (read-only enumeration — no tool invoked)
+tools: 9   flagged: 3
+  ⚑ PAGE F1  Lethal trifecta present across this page's tools — private-data read + untrusted-content ingest + external comms
+  ● community_sync [declared read-only]
+      CRITICAL A6  look-alike (non-ASCII) letters — о→o  U+043E
+      CRITICAL A7  invisible / bidi control characters — U+200B
+      CRITICAL A1  prompt-injection phrase(s) — "ignore previous"; "always use this"
+      CRITICAL G2  authority claim + trust-waiver ("skip confirmation")
+      CRITICAL G5  manufactured prior grant — "permissions you already granted"
+      HIGH     J6  steers the agent to prefer this tool — "always", "first"
+      MEDIUM   B6  schema allows arbitrary additional properties
+```
+
+**Zero-install:** open any WebMCP page's DevTools console and paste the contents of
+`dist-audit/guardian-audit.iife.js`, then run `await __guardianAudit()` (or paste the ready-made
+runner). Every finding cites the real Sentinel rule id, severity, and evidence.
+
 ## Verified vs assumed (scope, honestly)
 - **Verified** (in real headless Chromium, against the real `@mcp-b` polyfill): interception on the
   `executeTool` + testing‑shim paths; a `fetch` inside `execute` attributed to its tool and blocked;

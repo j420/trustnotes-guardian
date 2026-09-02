@@ -10,7 +10,9 @@
     "spike": "vite build --config vite.spike.config.ts && node run-spike.mjs",
     "e2e": "vite build && node e2e.mjs",
     "validate": "node validate-sentinel.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:audit": "vite build --config vite.audit.config.ts",
+    "audit": "node scripts/guardian-audit.mjs"
   },
   "dependencies": {
     "@mcp-b/global": "^5.1.0",
