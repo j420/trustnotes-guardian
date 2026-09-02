@@ -79,6 +79,12 @@ function renderNotes() {
 function renderGuardian() {
   const wrap = $("#g-tools");
   wrap.innerHTML = "";
+  const active = guardian.interceptionActive;
+  const status = el("div", "g-status " + (active ? "ok" : "warn"));
+  status.textContent = active
+    ? "🛡️ interception ACTIVE — Guardian wraps registerTool and witnesses every call in this browser"
+    : "⚠ interception LIMITED — this browser locks registerTool (native WebMCP); Guardian can still read tools, but consent/gating are unavailable here. Use a normal Chrome/Edge tab for the full demo.";
+  wrap.append(status);
   renderPageFindings(wrap);
   const records = [...guardian.tools.values()];
   if (!records.length) { wrap.append(el("p", "muted", "No page tools registered yet.")); }
@@ -196,23 +202,21 @@ function kv(k: string, v: string) { const d = el("div", "kv"); d.append(el("span
 
 // ---------- agent driver (shared by BOTH modes) + controls ----------
 /**
- * THE shared, gated dispatch path. Both the scripted simulator and the real OpenAI agent
- * route every tool call through here → `document.modelContext.executeTool` → Guardian's
- * `guardedExecute`. `argsJson` is a JSON string (the polyfill's executeTool requires the
- * LIVE tool descriptor, so we `find` it rather than synthesize one). Returns the tool's
- * textual result; never throws (a blocked/errored call is logged and returned as text).
+ * THE shared, gated dispatch path. Both the Witnessed-run simulator and the real OpenAI agent
+ * route every tool call through here → the tool's guarded execute → Guardian's gate. WebMCP
+ * runtimes disagree on how `executeTool` takes arguments — the `@mcp-b` polyfill wants a JSON
+ * STRING, native/newer builds want an OBJECT (they throw "requires an object input" on a string) —
+ * so `invokeThroughGate` reconciles them. Returns the tool's textual result; never throws.
  */
 async function execViaGuardian(realName: string, argsJson: string): Promise<string> {
   const mc: any = (document as any).modelContext ?? (navigator as any).modelContext;
+  const argsObj = safeJson(argsJson) ?? {};
   logSim(`agent → ${realName}(${trim(argsJson, 120)})`);
   try {
-    const tools = await mc.getTools();
-    const tool = tools.find((t: any) => t.name === realName);
-    const res = tool
-      ? await mc.executeTool(tool, argsJson, {})
-      : await (navigator as any).modelContextTesting?.executeTool(realName, argsJson);
-    // executeTool returns a JSON STRING (serializeChromeToolResult), so parse before
-    // reading .content/.isError — otherwise a Guardian-DENIED call renders green "ok".
+    const res = await invokeThroughGate(mc, realName, argsJson, argsObj);
+    // executeTool returns a JSON STRING (serializeChromeToolResult); guardedExecute returns the
+    // result object directly. Normalise both before reading .content/.isError, so a Guardian-DENIED
+    // call never renders green "ok".
     const parsed = typeof res === "string" ? safeJson(res) : res;
     const out = parsed?.content?.[0]?.text ?? (typeof res === "string" ? res : JSON.stringify(res));
     logSim(`  ↳ ${trim(String(out), 160)}`, parsed?.isError ? "err" : "ok");
@@ -221,6 +225,32 @@ async function execViaGuardian(realName: string, argsJson: string): Promise<stri
     const m = `blocked/error: ${e?.message || e}`;
     logSim(`  ↳ ${m}`, "err");
     return m;
+  }
+}
+
+/**
+ * Reach the tool's guarded execute across WebMCP runtimes:
+ *  1. Guardian's own gate when it successfully wrapped registerTool — runtime-independent, takes an
+ *     object, and is exactly where a real `executeTool` routes anyway.
+ *  2. Otherwise the WebMCP `executeTool` API — OBJECT form first (native / newer builds), then the
+ *     `@mcp-b` JSON-STRING form, retried ONLY on an input-shape error so a real side effect never
+ *     runs twice — then the testing shim.
+ */
+async function invokeThroughGate(mc: any, realName: string, argsJson: string, argsObj: unknown): Promise<any> {
+  const g: any = (window as any).__guardian;
+  if (g?.interceptionActive && g.tools?.has?.(realName) && typeof g.guardedExecute === "function") {
+    return g.guardedExecute(realName, argsObj);
+  }
+  const tools = mc?.getTools ? await mc.getTools() : [];
+  const tool = tools.find((t: any) => t.name === realName);
+  if (!tool) return (navigator as any).modelContextTesting?.executeTool(realName, argsJson);
+  try {
+    return await mc.executeTool(tool, argsObj); // object form (native / newer WebMCP)
+  } catch (e: any) {
+    if (/object input|must be a string|expected .*string|invalid.*argument|not.*json/i.test(String(e?.message || e))) {
+      return mc.executeTool(tool, argsJson, {}); // @mcp-b string form
+    }
+    throw e;
   }
 }
 
